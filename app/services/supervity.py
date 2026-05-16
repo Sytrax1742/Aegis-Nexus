@@ -121,6 +121,80 @@ class SupervityService:
             log.error(error_msg)
             raise
 
+    async def resume_workflow(
+        self,
+        run_id: str,
+        input_data: dict,
+    ) -> dict:
+        """
+        Resume a paused workflow by submitting human input.
+
+        This method sends a POST request to the Supervity resume endpoint
+        to continue a workflow that was paused and awaiting human input.
+
+        Args:
+            run_id: The ID of the workflow run to resume
+            input_data: Dictionary of input data to submit to the workflow
+
+        Returns:
+            dict: Parsed JSON response from the Supervity API
+
+        Raises:
+            ValueError: If SUPERVITY_TOKEN is not configured
+            httpx.HTTPError: If the API request fails
+        """
+
+        if not self.token:
+            error_msg = "SUPERVITY_TOKEN not configured. Cannot resume workflow."
+            log.error(error_msg)
+            raise ValueError(error_msg)
+
+        log.info(f"Resuming Supervity workflow: {run_id}")
+
+        try:
+            # Build the resume URL
+            resume_url = f"https://auto-workflow-api.supervity.ai/api/v1/workflow-runs/{run_id}/resume"
+
+            # Prepare headers
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "x-source": "v1",
+            }
+
+            log.debug(f"Sending resume request to {resume_url}")
+
+            # Execute async HTTP request
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    resume_url,
+                    json=input_data,
+                    headers=headers,
+                )
+
+                # Check for HTTP errors
+                response.raise_for_status()
+
+                # Parse and return JSON response
+                result = response.json()
+                log.info(f"Workflow {run_id} resumed successfully")
+                return result
+
+        except httpx.HTTPStatusError as e:
+            error_msg = f"Supervity API error (status {e.response.status_code}): {e.response.text}"
+            log.error(error_msg)
+            raise
+
+        except httpx.RequestError as e:
+            error_msg = f"Supervity API request failed: {str(e)}"
+            log.error(error_msg)
+            raise
+
+        except Exception as e:
+            error_msg = f"Unexpected error resuming Supervity workflow: {str(e)}"
+            log.error(error_msg)
+            raise
+
 
 # Global service instance
 supervity_service = SupervityService()

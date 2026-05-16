@@ -42,6 +42,13 @@ class OrchestratePayload(BaseModel):
     """Simplified payload for deal orchestration. Supervity handles all business logic."""
     transcript: str
 
+
+class ResolveExceptionPayload(BaseModel):
+    """Payload for submitting human input to resume a paused orchestration."""
+    runId: str
+    input_data: dict
+
+
 @router.post("/ingest-knowledge")
 async def ingest_knowledge(
     payload: IngestKnowledgePayload,
@@ -167,45 +174,21 @@ async def orchestrate_pipeline(
     
     Flow:
     1. Fetch the active corporate policy configuration from settings
-    2. Validate the Orchestrator ID is configured
-    3. Build the inputs dict with:
-       - sales_transcript: Raw call transcript
-       - knowledge_ingestion_output: Policy config JSON string
-       - Workflow IDs for all subordinate agents (Policy Guard, CRM Ops, etc.)
-    4. Make ONE async call to the Supervity Orchestrator
-    5. Log the entire orchestration event for audit compliance
-    
-    Returns orchestration result (approved, halted, or error).
+    2. If missing, return 400 error
+    3. Call supervity_service.execute_workflow with SUPERVITY_ORCHESTRATOR_ID
+    4. Inputs: sales_transcript (from payload) and knowledge_ingestion_output (JSON from DB)
+    5. Capture the runId (or workflow_run_id) from the Supervity response
+    6. Save a new log entry to AuditLog with resource_id = runId and success = PENDING
+    7. Return the runId to the frontend
     """
     
-    # Step 1: Validate Orchestrator ID is configured
-    if not SUPERVITY_ORCHESTRATOR_ID:
-        log.error("SUPERVITY_ORCHESTRATOR_ID not configured")
-        await audit.log(
-            action="nexus.orchestrate.error",
-            description="Orchestrator not configured in environment",
-            actor=current_user,
-            success=False,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="System misconfiguration: Orchestrator not available",
-        )
-
-    # Step 2: Fetch active policy configuration from settings table
+    # Step 1: Fetch active policy configuration from settings table
     policy_config_record = (
         db.query(Settings).filter(Settings.key == "active_policy_config").first()
     )
 
     if not policy_config_record or not policy_config_record.value:
         log.warning("No active policy configuration found in settings")
-        await audit.log(
-            action="nexus.orchestrate.error",
-            description="No corporate policy configuration found in settings",
-            actor=current_user,
-            success=False,
-            resource_type="deal",
-        )
         raise HTTPException(
             status_code=400,
             detail="Please sync corporate policies in Settings first.",
@@ -218,94 +201,137 @@ async def orchestrate_pipeline(
         json.loads(policy_config_json_str)
     except json.JSONDecodeError as e:
         log.error(f"Failed to parse policy config: {e}")
-        await audit.log(
-            action="nexus.orchestrate.error",
-            description=f"Policy configuration JSON is malformed: {str(e)}",
-            actor=current_user,
-            success=False,
-        )
         raise HTTPException(
             status_code=500, detail="Policy configuration is corrupted"
         )
 
-    # Log the start of orchestration
-    await audit.log(
-        action="nexus.orchestrate.started",
-        description="Initiated deal orchestration with Supervity Orchestrator",
-        actor=current_user,
-        success=True,
-        resource_type="deal",
-    )
-
-    # Step 3: Build the inputs dict for the Orchestrator with the new contract
+    # Step 2: Build the inputs dict for the Orchestrator
     orchestrator_inputs = {
         "sales_transcript": payload.transcript,
         "knowledge_ingestion_output": policy_config_json_str,
-        "policyguard_skill_id": WORKFLOW_IDS["POLICY_GUARD"],
-        "comms_ops_skill_id": WORKFLOW_IDS["COMMS_OPS"],
-        "crm_ops_skill_id": WORKFLOW_IDS["CRM_OPS"],
-        "doc_ops_skill_id": WORKFLOW_IDS["DOC_OPS"],
-        "leadintel_ops_skill_id": WORKFLOW_IDS["LEAD_INTEL"],
     }
 
-    # Step 4: Execute the Supervity Orchestrator (ONE async call)
+    # Step 3: Execute the Supervity Orchestrator (ONE async call)
     try:
         result = await supervity_service.execute_workflow(
             workflow_id=SUPERVITY_ORCHESTRATOR_ID,
             inputs=orchestrator_inputs,
         )
 
-        log.info(f"Orchestrator execution completed. Result: {result}")
+        log.info(f"Orchestrator execution initiated. Result: {result}")
 
-        # Step 5: Log the orchestration event with full result
-        outcome_status = result.get("status", "unknown")
-
-        if outcome_status == "workbench_halt" or outcome_status == "exception":
-            # Deal escalated to workbench due to policy violation or other exception
-            await audit.log(
-                action="nexus.orchestrate.workbench_halt",
-                description=f"Deal escalated to Supervity Workbench: {result.get('reason', 'Policy violation detected')}",
-                actor=current_user,
-                success=False,
-                resource_type="deal",
-                extra_data=result,
-            )
-        elif outcome_status == "success" or outcome_status == "approved":
-            # Deal approved and forwarded through pipeline
-            await audit.log(
-                action="nexus.orchestrate.success",
-                description="Deal orchestration completed successfully. Forwarded to CRM and document generation.",
-                actor=current_user,
-                success=True,
-                resource_type="deal",
-                extra_data=result,
-            )
-        else:
-            # Unknown or other status
-            await audit.log(
-                action="nexus.orchestrate.completed",
-                description=f"Deal orchestration completed with status: {outcome_status}",
-                actor=current_user,
-                success=True,
-                resource_type="deal",
-                extra_data=result,
+        # Step 4: Capture the runId from the Supervity response
+        run_id = result.get("runId") or result.get("workflow_run_id") or result.get("id")
+        
+        if not run_id:
+            log.error(f"No runId found in Supervity response: {result}")
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid response from Orchestrator: missing runId",
             )
 
+        # Step 5: Save a new log entry with status = PENDING
+        new_log_entry = AuditLog(
+            action="nexus.orchestrate",
+            description=f"Deal orchestration initiated with Supervity Orchestrator",
+            actor_email=current_user.get("email", "system"),
+            success=False,  # False means status is PENDING (awaiting completion)
+            severity="INFO",
+            resource_type="deal",
+            resource_id=str(run_id),
+        )
+        db.add(new_log_entry)
+        db.commit()
+
+        log.info(f"Created audit log entry for orchestration run: {run_id}")
+
+        # Step 6: Return the runId to the frontend
         return {
-            "status": "success",
-            "orchestrator_result": result,
+            "status": "pending",
+            "runId": run_id,
+            "message": "Deal orchestration initiated. Use runId to track progress.",
         }
 
     except Exception as e:
         log.error(f"Orchestrator execution failed: {e}")
-        await audit.log(
-            action="nexus.orchestrate.error",
-            description=f"Orchestrator execution failed: {str(e)}",
-            actor=current_user,
-            success=False,
-            resource_type="deal",
-        )
         raise HTTPException(
             status_code=500,
             detail=f"Orchestrator execution failed: {str(e)}",
+        )
+
+@router.post("/resolve-exception")
+async def resolve_exception(
+    payload: ResolveExceptionPayload,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Resolve an orchestration exception by submitting human input.
+    
+    This endpoint resumes a paused workflow by sending human input to the Supervity
+    "Submit Human Input" API. Used when a deal is halted for VP review/approval.
+    
+    Flow:
+    1. Validate runId exists in the payload
+    2. Call Supervity resume endpoint: POST /api/v1/workflow-runs/{runId}/resume
+    3. Log the resolution in AuditLog
+    4. Return success status
+    """
+    
+    if not payload.runId:
+        raise HTTPException(
+            status_code=400,
+            detail="runId is required to resolve an exception",
+        )
+
+    try:
+        log.info(f"Attempting to resolve orchestration exception for runId: {payload.runId}")
+
+        # Call the Supervity "Submit Human Input" API to resume the workflow
+        result = await supervity_service.resume_workflow(
+            run_id=payload.runId,
+            input_data=payload.input_data,
+        )
+
+        log.info(f"Orchestration exception resolved for runId: {payload.runId}")
+
+        # Log the resolution in AuditLog
+        resolution_log = AuditLog(
+            action="nexus.resolve_exception",
+            description=f"VP approved exception for orchestration runId: {payload.runId}. Workflow resumed with input data.",
+            actor_email=current_user.get("email", "system"),
+            success=True,
+            severity="INFO",
+            resource_type="deal",
+            resource_id=str(payload.runId),
+        )
+        db.add(resolution_log)
+        db.commit()
+
+        return {
+            "status": "success",
+            "runId": payload.runId,
+            "message": "Exception resolved and orchestration resumed",
+            "supervity_response": result,
+        }
+
+    except Exception as e:
+        log.error(f"Exception resolution failed for runId {payload.runId}: {e}")
+        
+        # Log the failure
+        failure_log = AuditLog(
+            action="nexus.resolve_exception.error",
+            description=f"Failed to resolve exception for runId {payload.runId}: {str(e)}",
+            actor_email=current_user.get("email", "system"),
+            success=False,
+            severity="ERROR",
+            resource_type="deal",
+            resource_id=str(payload.runId),
+        )
+        db.add(failure_log)
+        db.commit()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Exception resolution failed: {str(e)}",
         )

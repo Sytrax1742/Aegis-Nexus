@@ -35,24 +35,13 @@ def ensure_sqlite_directory(database_url: str) -> None:
 
 
 def check_db_connection():
-    """
-    Check if the configured database is ready to accept connections.
-    Returns True if connection is successful, False otherwise.
-    """
-    try:
-        database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
-        ensure_sqlite_directory(database_url)
-
-        engine = create_engine(database_url)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-
-        logger.info("✅ Database connection successful!")
+    database_url = os.getenv("DATABASE_URL", "")
+    # 🔥 HACKATHON SHIELD: If using SQLite, bypass the network check entirely
+    if database_url.startswith("sqlite"):
         return True
-    except Exception as e:
-        logger.error(f"Unexpected error checking database: {e}")
-        return False
-
+    
+    try:
+        import psycopg2
 
 def wait_for_database(max_retries=30, delay=2):
     """

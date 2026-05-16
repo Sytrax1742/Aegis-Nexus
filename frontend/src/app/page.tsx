@@ -519,6 +519,7 @@ interface Agent {
   name: string
 }
 
+// Static agent list for visualization
 const AGENTS: Agent[] = [
   { id: 1, name: 'Orchestrator' },
   { id: 2, name: 'Lead Intel' },
@@ -714,32 +715,48 @@ function PipelineTracker({
 }
 
 // Exception Inbox Component - Action items requiring VP approval
-interface ExceptionItem {
-  id: string
-  company: string
-  reason: string
-  time: string
-  type: 'POLICY_VIOLATION' | 'BANT_FAILURE'
+interface LogItem {
+  id: number
+  timestamp: string
+  action: string
+  description: string
+  success: boolean
+  resource_type?: string
+  resource_id?: string
 }
 
-const EXCEPTION_ITEMS: ExceptionItem[] = [
-  {
-    id: 'DEAL-1042',
-    company: 'Acme Corp',
-    reason: 'Requested discount (35%) exceeds max tier (20%).',
-    time: 'Just now',
-    type: 'POLICY_VIOLATION',
-  },
-  {
-    id: 'LEAD-883',
-    company: 'CloudNet',
-    reason: 'Missing Budget (BANT failure).',
-    time: '2h ago',
-    type: 'BANT_FAILURE',
-  },
-]
-
 function ExceptionInbox() {
+  const [exceptions, setExceptions] = useState<LogItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isOffline, setIsOffline] = useState(false)
+
+  useEffect(() => {
+    const fetchExceptions = async () => {
+      try {
+        setIsOffline(false)
+        setIsLoading(true)
+        const response = await apiClient<AuditLog[]>('/api/v1/nexus/logs', {
+          method: 'GET',
+        })
+        // Filter for logs waiting for input: action="nexus.orchestrate" and success=false (PENDING/WAITING_FOR_INPUT)
+        const waitingForInput = response.filter(
+          (log: AuditLog) => log.action === 'nexus.orchestrate' && !log.success
+        )
+        setExceptions(waitingForInput as LogItem[])
+      } catch (error) {
+        // Check if it's a network error
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+          setIsOffline(true)
+        }
+        setExceptions([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchExceptions()
+  }, [])
+
   return (
     <motion.div variants={itemVariants}>
       <Card className='relative overflow-hidden shadow-glass'>
@@ -752,42 +769,74 @@ function ExceptionInbox() {
           <p className='text-sm text-muted-foreground mt-1'>Requires VP Approval</p>
         </CardHeader>
         <CardContent className='relative z-10 space-y-3'>
-          {EXCEPTION_ITEMS.map((item, index) => (
+          {isOffline && (
+            <div className='rounded-lg bg-slate-100 p-4 border border-slate-300 text-center'>
+              <p className='text-sm text-slate-600 font-medium'>🔌 System Offline</p>
+              <p className='text-xs text-slate-500 mt-1'>Cannot reach Supervity. Check your connection.</p>
+            </div>
+          )}
+
+          {isLoading && !isOffline && (
+            <div className='flex items-center justify-center py-6'>
+              <motion.div
+                className='h-4 w-4 rounded-full border-2 border-brand-cornflower border-t-transparent'
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
+              <p className='ml-2 text-sm text-muted-foreground'>Loading...</p>
+            </div>
+          )}
+
+          {!isLoading && !isOffline && exceptions.length === 0 && (
+            <div className='rounded-lg bg-emerald-50 p-4 border border-emerald-200 text-center'>
+              <p className='text-sm text-emerald-600 font-medium'>✓ All Clear</p>
+              <p className='text-xs text-emerald-500 mt-1'>No deals awaiting VP approval</p>
+            </div>
+          )}
+
+          {!isLoading && exceptions.map((item, index) => (
             <motion.div
               key={item.id}
               variants={itemVariants}
               initial='hidden'
               animate='visible'
               transition={{ delay: index * 0.1 }}
-              className='flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/50 p-3 hover:bg-slate-100/70 transition-colors'
+              className='flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4 hover:bg-amber-100/70 transition-colors'
             >
               {/* Pulse Indicator */}
-              {item.type === 'POLICY_VIOLATION' && (
-                <motion.div
-                  className='mt-1 h-2 w-2 rounded-full bg-red-500 shrink-0'
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-              )}
-              {item.type === 'BANT_FAILURE' && (
-                <div className='mt-1 h-2 w-2 rounded-full bg-yellow-500 shrink-0' />
-              )}
+              <motion.div
+                className='mt-1 h-3 w-3 rounded-full bg-amber-500 shrink-0'
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
 
               {/* Content */}
               <div className='flex-1 min-w-0'>
                 <div className='flex items-start justify-between gap-2'>
                   <div className='flex-1'>
-                    <p className='text-sm font-semibold text-foreground'>{item.company}</p>
-                    <p className='text-xs text-muted-foreground mt-0.5 line-clamp-2'>{item.reason}</p>
-                    <p className='text-xs text-muted-foreground/70 mt-1'>{item.time}</p>
+                    <p className='text-sm font-semibold text-amber-900'>
+                      📋 Review Deal: <span className='font-mono text-xs'>{item.resource_type}</span>
+                    </p>
+                    <p className='text-xs text-amber-800 mt-0.5 line-clamp-2'>{item.description}</p>
+                    <div className='flex items-center gap-2 mt-2'>
+                      <p className='text-xs text-amber-700 font-mono'>
+                        Run ID: <span className='font-bold'>{item.resource_id}</span>
+                      </p>
+                      <p className='text-xs text-amber-600'>
+                        {new Date(item.timestamp).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <p className='text-xs font-mono text-muted-foreground shrink-0'>{item.id}</p>
                 </div>
               </div>
 
               {/* Review Button */}
-              <Button variant='outline' size='sm' className='shrink-0 mt-1'>
-                Review
+              <Button 
+                variant='outline' 
+                size='sm' 
+                className='shrink-0 mt-1 border-amber-300 hover:bg-amber-100'
+              >
+                Approve
               </Button>
             </motion.div>
           ))}
@@ -885,6 +934,13 @@ function ActiveGuardrails() {
           {error && (
             <div className='rounded-lg bg-red-50 p-3 border border-red-200'>
               <p className='text-sm text-red-600'>⚠️ {error}</p>
+            </div>
+          )}
+
+          {!isLoading && !error && !policies && (
+            <div className='rounded-lg bg-yellow-50 p-4 border border-yellow-200 text-center'>
+              <p className='text-sm text-yellow-700 font-medium'>📋 No Policies Loaded</p>
+              <p className='text-xs text-yellow-600 mt-1'>Sync corporate documents in Settings to enable AI governance.</p>
             </div>
           )}
 
