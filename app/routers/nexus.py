@@ -32,9 +32,10 @@ WORKFLOW_IDS = {
 }
 
 class IngestKnowledgePayload(BaseModel):
-    document_content: str
-    document_type: str = "policy"
-    source: str = "unknown"
+    """Knowledge ingestion payload with three distinct document types."""
+    sales_policy: str
+    pipeline_sop: str
+    org_hierarchy: str
 
 
 class OrchestratePayload(BaseModel):
@@ -55,13 +56,13 @@ async def ingest_knowledge(
     the Orchestrator when processing deals.
     """
     try:
-        # Call the Knowledge Ingestion Agent
+        # Call the Knowledge Ingestion Agent with three distinct inputs
         result = await supervity_service.execute_workflow(
             workflow_id=KNOWLEDGE_INGESTION_ID,
             inputs={
-                "document_content": payload.document_content,
-                "document_type": payload.document_type,
-                "source": payload.source,
+                "sales_discount_policy": payload.sales_policy,
+                "sales_pipeline_sop": payload.pipeline_sop,
+                "org_hierarchy": payload.org_hierarchy,
             },
         )
 
@@ -90,7 +91,7 @@ async def ingest_knowledge(
         # Log the successful ingestion
         await audit.log(
             action="nexus.ingest_knowledge",
-            description=f"Knowledge document ingested and policy config saved: {payload.source}",
+            description="Knowledge documents ingested: sales policy, pipeline SOP, and org hierarchy",
             actor=current_user,
             success=True,
             resource_type="policy_config",
@@ -99,7 +100,7 @@ async def ingest_knowledge(
 
         return {
             "status": "success",
-            "message": f"Knowledge document '{payload.source}' ingested successfully",
+            "message": "Knowledge base updated with sales policy, pipeline SOP, and organization hierarchy",
             "policy_config": result,
         }
 
