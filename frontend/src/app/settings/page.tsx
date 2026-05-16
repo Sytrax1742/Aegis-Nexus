@@ -1,247 +1,101 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { CardWatermark } from '@/components/ui/card-watermark'
 import { Button } from '@/components/ui/button'
-import { Avatar } from '@/components/ui/avatar'
 import { Icons } from '@/components/ui/icons'
-import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { apiClient } from '@/lib/api-client'
+import { toast } from '@/components/ui/toast'
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
-}
+export default function AdminSettingsPage() {
+  const { data: session, status: sessionStatus } = useSession()
+  const router = useRouter()
+  
+  // Knowledge Ingestion State
+  const [knowledgeText, setKnowledgeText] = useState('')
+  const [docType, setDocType] = useState('sales_policy')
+  const [isSyncing, setIsSyncing] = useState(false)
+  
+  const isAdmin = session?.roles?.includes('admin')
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-}
+  useEffect(() => {
+    if (sessionStatus === 'unauthenticated') router.push('/auth/signin')
+  }, [sessionStatus, router])
 
-// Settings sections
-const settingsSections = [
-  {
-    id: 'notifications',
-    title: 'Notifications',
-    description: 'Manage how you receive notifications',
-    icon: Icons.bell,
-  },
-  {
-    id: 'security',
-    title: 'Security',
-    description: 'Password, 2FA, and session management',
-    icon: Icons.eye,
-  },
-  {
-    id: 'integrations',
-    title: 'Integrations',
-    description: 'Connected apps and services',
-    icon: Icons.share,
-  },
-  {
-    id: 'preferences',
-    title: 'Preferences',
-    description: 'Language, timezone, and display settings',
-    icon: Icons.settings,
-  },
-]
+  const handleSyncKnowledge = async () => {
+    if (!knowledgeText.trim()) return
+    setIsSyncing(true)
+    try {
+      await apiClient.post('/api/v1/nexus/ingest-knowledge', {
+        document_content: knowledgeText,
+        document_type: docType,
+        source: 'Manual Executive Upload'
+      })
+      toast.success('Supervity Brain Updated', { 
+        description: 'Corporate policies have been synced and cached.' 
+      })
+      setKnowledgeText('')
+    } catch (err) {
+      toast.error('Sync Failed', { 
+        description: 'Could not connect to Supervity Ingestion Ops.' 
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
-function SettingToggle({
-  id,
-  label,
-  description,
-  defaultChecked = false,
-}: {
-  id: string
-  label: string
-  description: string
-  defaultChecked?: boolean
-}) {
-  const [checked, setChecked] = useState(defaultChecked)
+  if (sessionStatus === 'loading') {
+    return <div className='flex h-full items-center justify-center'><Icons.loader className='h-8 w-8 animate-spin text-brand-cornflower' /></div>
+  }
+
+  if (!isAdmin) return null
 
   return (
-    <div className='flex items-center justify-between py-3'>
-      <div className='space-y-0.5'>
-        <Label htmlFor={id} className='text-sm font-medium text-foreground cursor-pointer'>
-          {label}
-        </Label>
-        <p className='text-xs text-muted-foreground'>{description}</p>
-      </div>
-      <Switch
-        id={id}
-        checked={checked}
-        onCheckedChange={setChecked}
-      />
-    </div>
-  )
-}
+    <div className='space-y-6'>
+      <h1 className='text-display-4 font-bold text-brand-navy'>Admin Settings</h1>
 
-export default function SettingsPage() {
-  const { data: session } = useSession()
-
-  return (
-    <motion.div
-      className='space-y-8'
-      variants={containerVariants}
-      initial='hidden'
-      animate='visible'
-    >
-      {/* Header */}
-      <motion.div variants={itemVariants}>
-        <h1 className='text-display-3 font-bold tracking-tight text-brand-navy'>
-          Settings
-        </h1>
-        <p className='mt-2 text-lg text-muted-foreground'>
-          Manage your account and application preferences.
-        </p>
-      </motion.div>
-
-      {/* Profile Section */}
-      <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile</CardTitle>
-            <CardDescription>Your personal information</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className='flex items-center gap-6'>
-              <Avatar
-                src={session?.user?.image}
-                fallback={session?.user?.name || session?.user?.email || '?'}
-                size='lg'
-                showRing
-              />
-              <div className='flex-1'>
-                <h3 className='text-lg font-semibold text-foreground'>
-                  {session?.user?.name || 'User'}
-                </h3>
-                <p className='text-sm text-muted-foreground'>
-                  {session?.user?.email}
-                </p>
-                <p className='mt-1 text-xs text-muted-foreground'>
-                  AutoPilot Developer
-                </p>
-              </div>
-              <Button variant='outline'>
-                <Icons.externalLink className='mr-2 h-4 w-4' />
-                Edit Profile
-              </Button>
+      {/* Knowledge Ingestion Card */}
+      <Card className='relative overflow-hidden'>
+        <CardWatermark opacity={5} scale={1.2} />
+        <CardHeader className='relative z-10'>
+          <CardTitle className='flex items-center gap-2 text-brand-navy'>
+            <Icons.brain className='h-5 w-5 text-brand-cornflower' />
+            Knowledge Base Ingestion
+          </CardTitle>
+          <CardDescription>Paste raw corporate documents to train the Aegis-Nexus brain live.</CardDescription>
+        </CardHeader>
+        <CardContent className='relative z-10 space-y-4'>
+          <textarea
+            value={knowledgeText}
+            onChange={(e) => setKnowledgeText(e.target.value)}
+            placeholder="Paste raw Policy text here (e.g. Corporate Sales & Discount Policy 2026)..."
+            className="w-full min-h-[250px] p-4 rounded-xl border border-border bg-white text-sm focus:ring-2 focus:ring-brand-cornflower/50 outline-none transition-all"
+          />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Label className="text-brand-navy font-semibold">Document Type:</Label>
+              <select 
+                value={docType} 
+                onChange={(e) => setDocType(e.target.value)}
+                className="bg-gray-50 border border-gray-300 text-brand-navy text-sm rounded-lg p-2 focus:ring-brand-cornflower outline-none"
+              >
+                <option value="sales_policy">Sales Policy</option>
+                <option value="org_hierarchy">Org Hierarchy</option>
+                <option value="pipeline_sop">Pipeline SOP</option>
+              </select>
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Settings Grid */}
-      <div className='grid gap-6 md:grid-cols-2'>
-        {settingsSections.map((section) => {
-          const Icon = section.icon
-          return (
-            <motion.div key={section.id} variants={itemVariants}>
-              <Card className='h-full'>
-                <CardHeader>
-                  <div className='flex items-center gap-3'>
-                    <div className='flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cornflower/10'>
-                      <Icon
-                        className='h-5 w-5 text-brand-cornflower'
-                        strokeWidth={1.5}
-                      />
-                    </div>
-                    <div>
-                      <CardTitle className='text-base'>
-                        {section.title}
-                      </CardTitle>
-                      <CardDescription className='text-xs'>
-                        {section.description}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button variant='ghost' className='w-full justify-between'>
-                    Configure
-                    <Icons.chevronRight className='h-4 w-4' />
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )
-        })}
-      </div>
-
-      {/* Quick Settings */}
-      <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Settings</CardTitle>
-            <CardDescription>
-              Common settings you can toggle quickly
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='divide-y divide-border'>
-            <SettingToggle
-              id='email-notifications'
-              label='Email Notifications'
-              description='Receive email notifications for important updates'
-              defaultChecked={true}
-            />
-            <SettingToggle
-              id='desktop-notifications'
-              label='Desktop Notifications'
-              description='Show desktop notifications when the app is open'
-              defaultChecked={true}
-            />
-            <SettingToggle
-              id='weekly-digest'
-              label='Weekly Digest'
-              description='Receive a weekly summary of your activity'
-              defaultChecked={false}
-            />
-            <SettingToggle
-              id='marketing-emails'
-              label='Marketing Emails'
-              description='Receive product updates and announcements'
-              defaultChecked={false}
-            />
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Danger Zone */}
-      <motion.div variants={itemVariants}>
-        <Card className='border-red-200'>
-          <CardHeader>
-            <CardTitle className='text-red-600'>Danger Zone</CardTitle>
-            <CardDescription>Irreversible actions</CardDescription>
-          </CardHeader>
-          <CardContent className='flex items-center justify-between'>
-            <div>
-              <p className='text-sm font-medium text-foreground'>
-                Delete Account
-              </p>
-              <p className='text-xs text-muted-foreground'>
-                Permanently delete your account and all associated data
-              </p>
-            </div>
-            <Button
-              variant='outline'
-              className='border-red-200 text-red-600 hover:bg-red-50'
-            >
-              Delete Account
+            <Button variant="gradient" onClick={handleSyncKnowledge} disabled={isSyncing || !knowledgeText}>
+              {isSyncing ? <Icons.loader className="animate-spin mr-2 h-4 w-4" /> : <Icons.sparkles className="mr-2 h-4 w-4" />}
+              Sync to Supervity AI
             </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </motion.div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

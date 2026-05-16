@@ -203,17 +203,45 @@ function IngestionEngine({
   onResultChange: (result: { status: string; message: string; metadata?: unknown } | null) => void
   onExecutionComplete: () => void
 }) {
-  const [prospectName, setProspectName] = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [dealSize, setDealSize] = useState('')
-  const [requestedDiscount, setRequestedDiscount] = useState('')
+  const [transcript, setTranscript] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleExecute = async () => {
-    if (!prospectName.trim() || !companyName.trim() || !dealSize || !requestedDiscount) {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.name.endsWith('.txt')) {
       onResultChange({
         status: 'error',
-        message: '⚠️ Please fill in all fields',
+        message: '⚠️ Please select a .txt file',
+      })
+      return
+    }
+
+    try {
+      const fileContent = await file.text()
+      setTranscript(fileContent)
+      onResultChange(null)
+    } catch (error) {
+      onResultChange({
+        status: 'error',
+        message: `⚠️ Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      })
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleExecute = async () => {
+    if (!transcript.trim()) {
+      onResultChange({
+        status: 'error',
+        message: '⚠️ Please paste or upload a sales call transcript',
       })
       return
     }
@@ -228,29 +256,28 @@ function IngestionEngine({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prospect_name: prospectName,
-          company_name: companyName,
-          deal_size: parseFloat(dealSize),
-          requested_discount: parseFloat(requestedDiscount),
+          transcript: transcript,
         }),
       }) as { status: string; message: string; metadata?: Record<string, unknown> }
 
       onResultChange(response)
 
-      // Clear fields on success
+      // Clear transcript on success
       if (response.status === 'success') {
-        setProspectName('')
-        setCompanyName('')
-        setDealSize('')
-        setRequestedDiscount('')
+        setTranscript('')
       }
 
       // Trigger logs refresh
       onExecutionComplete()
     } catch (error: unknown) {
-      // Handle 403 policy violation
+      // Handle 400 missing policy config
       const errorResponse = error as Record<string, unknown>
-      if (errorResponse.status === 403) {
+      if (errorResponse.status === 400) {
+        onResultChange({
+          status: 'error',
+          message: '⚠️ Please sync corporate policies in Settings first.',
+        })
+      } else if (errorResponse.status === 403) {
         onResultChange({
           status: 'halted',
           message: '⚠️ POLICY VIOLATION CAUGHT: Deal exceeds risk parameters. Routed to Supervity Workbench.',
@@ -289,7 +316,7 @@ function IngestionEngine({
         <CardHeader className='relative z-10'>
           <CardTitle className='flex items-center gap-2'>
             <Icons.zap className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
-            Orchestrate Deal Processing
+            Ingest Sales Call Transcript
           </CardTitle>
         </CardHeader>
         <CardContent className='relative z-10 space-y-4'>
@@ -317,73 +344,49 @@ function IngestionEngine({
             )}
           </AnimatePresence>
 
-          {/* Input Fields Grid */}
-          <div className='grid grid-cols-2 gap-3'>
-            {/* Prospect Name */}
-            <div className='space-y-2'>
-              <label className='text-sm font-medium text-foreground'>Prospect Name</label>
-              <input
-                type='text'
-                value={prospectName}
-                onChange={(e) => setProspectName(e.target.value)}
+          {/* Transcript Textarea with Upload */}
+          <div className='space-y-2'>
+            <label className='text-sm font-medium text-foreground'>Sales Call Transcript</label>
+            <div className='relative'>
+              <textarea
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
                 disabled={isLoading}
-                placeholder='John Smith'
-                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+                placeholder='Paste the sales call transcript here. Our AI will analyze the deal terms, discount requests, and policy compliance...'
+                className='w-full h-48 rounded-lg border border-input bg-background px-4 py-3 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower resize-none'
               />
-            </div>
 
-            {/* Company Name */}
-            <div className='space-y-2'>
-              <label className='text-sm font-medium text-foreground'>Company Name</label>
-              <input
-                type='text'
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+              {/* Upload Button Inside Textarea */}
+              <motion.button
+                onClick={() => fileInputRef.current?.click()}
                 disabled={isLoading}
-                placeholder='TechCorp Inc'
-                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
-              />
-            </div>
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                className='absolute bottom-3 right-3 flex items-center justify-center h-8 w-8 rounded-lg bg-brand-cornflower/10 hover:bg-brand-cornflower/20 text-brand-cornflower transition-colors disabled:opacity-50'
+                title='Upload .txt file'
+              >
+                <Icons.upload className='h-4 w-4' strokeWidth={1.5} />
+              </motion.button>
 
-            {/* Deal Size */}
-            <div className='space-y-2'>
-              <label className='text-sm font-medium text-foreground'>Deal Size ($)</label>
+              {/* Hidden File Input */}
               <input
-                type='number'
-                value={dealSize}
-                onChange={(e) => setDealSize(e.target.value)}
+                ref={fileInputRef}
+                type='file'
+                accept='.txt'
+                onChange={handleFileUpload}
                 disabled={isLoading}
-                placeholder='250000'
-                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+                className='hidden'
               />
             </div>
-
-            {/* Requested Discount */}
-            <div className='space-y-2'>
-              <label className='text-sm font-medium text-foreground'>Requested Discount (%)</label>
-              <input
-                type='number'
-                value={requestedDiscount}
-                onChange={(e) => setRequestedDiscount(e.target.value)}
-                disabled={isLoading}
-                placeholder='15'
-                min='0'
-                max='100'
-                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
-              />
-            </div>
+            <p className='text-xs text-muted-foreground'>
+              💡 Tip: Click the upload icon or paste your transcript directly. Supports .txt files.
+            </p>
           </div>
 
           {/* Execute Button */}
           <Button
             onClick={handleExecute}
-            disabled={
-              isLoading ||
-              !prospectName.trim() ||
-              !companyName.trim() ||
-              !dealSize ||
-              !requestedDiscount
-            }
+            disabled={isLoading || !transcript.trim()}
             variant='gradient'
             className='w-full'
           >
@@ -816,7 +819,7 @@ const POLICY_ITEMS = [
   {
     key: 'sales_pipeline_sop',
     label: 'Sales Pipeline SOP',
-    icon: Icons.gitBranch,
+    icon: Icons.network,
     iconColor: 'text-brand-cornflower',
   },
   {
