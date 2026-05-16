@@ -15,6 +15,8 @@ build/
 .npm
 .eslintcache
 .node_repl_history
+next-env.d.ts
+frontend/next-env.d.ts
 
 # Python
 __pycache__/
@@ -40,8 +42,25 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Testing
 .pytest_cache/
 .coverage
+htmlcov/
+.tox/
+pytest.ini
+coverage.xml
+*/.pytest_cache/
+tests/__pycache__/
+tests/.pytest_cache/
+scripts/__pycache__/
+.hypothesis/
+
+# Test files (temporary test scripts)
+scripts/e2e_tester.py
+scripts/test_simple.py
+
+# Environment & Dependencies
 .env
 venv/
 ENV/
@@ -61,6 +80,37 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
+# Local development
+agents/
+scratch/
+.local/
+
 # Misc
 .cache
 .turbo
+data/
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
+
+# Build outputs
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Package manager lockfiles (optional - uncomment if desired)
+# package-lock.json
+# yarn.lock
+
+# Test reports
+test-results/
+test-reports/
+coverage-reports/
+
+# IDE temporary files
+*.tmp
+*.log
+node_modules/.vite
+.netlify

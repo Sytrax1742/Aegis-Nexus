@@ -68,7 +68,7 @@ log.info(f"API Base Path: '{BASE_PATH}' (empty means root)")
 
 app = FastAPI(
     title="AutoPilot API",
-    description="AI Command Center — Full-stack template with FastAPI, Next.js, and PostgreSQL",
+    description="AI Command Center — Full-stack template with FastAPI, Next.js, and SQLite",
     version="2.0.0",
     docs_url=f"{BASE_PATH}/api/docs",
     redoc_url=f"{BASE_PATH}/api/redoc",

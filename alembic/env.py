@@ -21,7 +21,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from app.core.database import Base
+from app.core.database import Base, DATABASE_URL
 from app.models import *  # Import all your models here
 
 target_metadata = Base.metadata
@@ -44,9 +44,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
-    if url is None:
-        url = os.environ.get("DATABASE_URL")
+    url = config.get_main_option("sqlalchemy.url") or DATABASE_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -65,9 +63,8 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    configuration = config.get_section(config.config_ini_section)
-    if "sqlalchemy.url" not in configuration:
-        configuration["sqlalchemy.url"] = os.environ.get("DATABASE_URL")
+    configuration = config.get_section(config.config_ini_section) or {}
+    configuration["sqlalchemy.url"] = configuration.get("sqlalchemy.url") or DATABASE_URL
 
     connectable = engine_from_config(
         configuration,

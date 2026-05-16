@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column(
             "timestamp",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         # Who

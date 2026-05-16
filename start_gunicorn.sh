@@ -27,52 +27,7 @@ if [ "${APP_ENV}" = "production" ]; then
     
     # Verify database connectivity before running migrations
     echo "🔍 Verifying database connectivity..."
-    
-    set +e  # Temporarily disable exit-on-error
-    python -c "
-import os
-import sys
-from urllib.parse import urlparse, parse_qs
-
-database_url = os.getenv('DATABASE_URL', '')
-if not database_url:
-    print('⚠️  DATABASE_URL not set')
-    sys.exit(1)
-
-try:
-    import psycopg2
-    
-    parsed = urlparse(database_url)
-    conn_params = {
-        'user': parsed.username,
-        'password': parsed.password,
-        'database': parsed.path.lstrip('/'),
-        'connect_timeout': 10
-    }
-    
-    query_params = parse_qs(parsed.query)
-    if 'host' in query_params:
-        conn_params['host'] = query_params['host'][0]
-    elif parsed.hostname:
-        conn_params['host'] = parsed.hostname
-        conn_params['port'] = str(parsed.port or 5432)
-    
-    conn = psycopg2.connect(**conn_params)
-    conn.close()
-    print('✅ Database connected')
-    sys.exit(0)
-        
-except Exception as e:
-    print(f'❌ Database connection failed: {e}')
-    sys.exit(1)
-"
-    DB_STATUS=$?
-    set -e  # Re-enable exit-on-error
-    
-    if [ $DB_STATUS -ne 0 ]; then
-        echo "❌ Cannot connect to database. Exiting."
-        exit 1
-    fi
+    python utils/wait_for_db.py
     
     # Always run migrations - Alembic is idempotent
     # It only runs migrations that haven't been applied yet

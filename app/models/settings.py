@@ -22,9 +22,11 @@ class Settings(Base):
     value = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
 
     def __repr__(self):
         return f"<Settings(key='{self.key}')>"

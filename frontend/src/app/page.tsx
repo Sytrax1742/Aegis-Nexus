@@ -233,9 +233,9 @@ function IngestionEngine({
           deal_size: parseFloat(dealSize),
           requested_discount: parseFloat(requestedDiscount),
         }),
-      })
+      }) as { status: string; message: string; metadata?: Record<string, unknown> }
 
-      onResultChange(response as { status: string; message: string; metadata?: unknown })
+      onResultChange(response)
 
       // Clear fields on success
       if (response.status === 'success') {
@@ -247,9 +247,10 @@ function IngestionEngine({
 
       // Trigger logs refresh
       onExecutionComplete()
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle 403 policy violation
-      if (error.status === 403) {
+      const errorResponse = error as Record<string, unknown>
+      if (errorResponse.status === 403) {
         onResultChange({
           status: 'halted',
           message: '⚠️ POLICY VIOLATION CAUGHT: Deal exceeds risk parameters. Routed to Supervity Workbench.',
@@ -307,7 +308,7 @@ function IngestionEngine({
                 )}
               >
                 <p className='font-medium'>{result.message}</p>
-                {result.metadata && (
+                {!!result.metadata && (
                   <p className='mt-2 text-xs opacity-75'>
                     {JSON.stringify(result.metadata, null, 2)}
                   </p>
@@ -397,7 +398,7 @@ function IngestionEngine({
               </>
             ) : (
               <>
-                <Icons.play className='mr-2 h-4 w-4' strokeWidth={1.5} />
+                <Icons.zap className='mr-2 h-4 w-4' strokeWidth={1.5} />
                 Execute Pipeline
               </>
             )}
@@ -444,10 +445,6 @@ function ExecutionLogsTable({ refreshTrigger }: { refreshTrigger: number }) {
     fetchLogs()
   }, [refreshTrigger])
 
-  const getStatusColor = (success: boolean) => {
-    return success ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'
-  }
-
   const getStatusBadge = (success: boolean) => {
     return success ? (
       <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800'>
@@ -466,7 +463,7 @@ function ExecutionLogsTable({ refreshTrigger }: { refreshTrigger: number }) {
         <CardWatermark opacity={3} scale={0.9} />
         <CardHeader className='relative z-10'>
           <CardTitle className='flex items-center gap-2'>
-            <Icons.list className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
+            <Icons.activity className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
             Execution Logs
           </CardTitle>
           <p className='text-sm text-muted-foreground mt-1'>Last 10 operations</p>

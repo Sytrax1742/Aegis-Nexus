@@ -105,7 +105,7 @@ class AuditLog(Base):
     # When
     timestamp = Column(
         DateTime(timezone=True),
-        server_default=func.now(),
+        server_default=func.current_timestamp(),
         nullable=False,
         index=True,
     )

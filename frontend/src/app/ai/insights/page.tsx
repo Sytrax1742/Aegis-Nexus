@@ -84,12 +84,6 @@ const DEMO_ACTIONS: ActionItem[] = [
   { title: 'Consolidate duplicate Acme Corp deal records', priority: 'critical', estimated_impact: 'Prevent $250k revenue recognition error', action_type: 'review_duplicate', action_config: { deal_ids: ['DEAL-2024-5834', 'DEAL-2024-5841'] }, is_demo: true },
 ]
 
-interface _InsightsResponse {
-  insights: Insight[]
-  patterns: Pattern[]
-  actions: ActionItem[]
-}
-
 // Tab configuration
 interface Tab {
   id: string

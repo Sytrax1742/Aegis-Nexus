@@ -2,25 +2,6 @@
 # AutoPilot Template — Docker Compose for local development
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-app_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-app_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: .
@@ -30,6 +11,7 @@ services:
       - ./utils:/app/utils
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
+      - ./data:/app/data
       - document_storage:/app/document_storage
     ports:
       - "127.0.0.1:8001:8000"
@@ -38,9 +20,6 @@ services:
       - AUTH_BYPASS=${AUTH_BYPASS:-true}
     env_file:
       - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - app-network
     restart: unless-stopped
@@ -74,7 +53,6 @@ services:
       start_period: 30s
 
 volumes:
-  postgres_data:
   document_storage:
 
 networks:

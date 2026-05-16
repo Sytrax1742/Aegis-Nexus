@@ -33,7 +33,7 @@ def upgrade() -> None:
     op.add_column('audit_logs', sa.Column('response_status', sa.Integer(), nullable=True))
     op.add_column('audit_logs', sa.Column('response_time_ms', sa.Float(), nullable=True))
     op.add_column('audit_logs', sa.Column('response_body', sa.Text(), nullable=True))
-    op.add_column('audit_logs', sa.Column('is_middleware', sa.Boolean(), nullable=False, server_default='false'))
+    op.add_column('audit_logs', sa.Column('is_middleware', sa.Boolean(), nullable=False, server_default=sa.text('0')))
     
     # Add indexes for common query patterns
     op.create_index('ix_audit_logs_http_method', 'audit_logs', ['http_method'])

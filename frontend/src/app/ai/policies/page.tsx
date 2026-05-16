@@ -213,7 +213,7 @@ export default function AIPoliciesPage() {
     loadPolicies()
   }, [loadPolicies])
 
-  const togglePolicyStatus = useCallback(async (id: string, _isActive: boolean) => {
+  const togglePolicyStatus = useCallback(async (id: string) => {
     // Toggle locally (replace with API call)
     setPolicies(prev => prev.map(p => p.id === id ? { ...p, is_active: !p.is_active } : p))
   }, [])
@@ -635,8 +635,8 @@ export default function AIPoliciesPage() {
           setSelectedPolicy(null)
         }}
         onEdit={handleEditFromDetail}
-        onToggleStatus={(id, isActive) => {
-          togglePolicyStatus(id, isActive)
+        onToggleStatus={(id) => {
+          togglePolicyStatus(id)
           setIsDetailModalOpen(false)
         }}
         onDelete={(id) => {
