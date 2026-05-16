@@ -614,6 +614,135 @@ function ExceptionInbox() {
   )
 }
 
+// Active Guardrails Component - Display live RAG policies
+interface RAGSummary {
+  sales_discount_policy: string
+  sales_pipeline_sop: string
+  org_hierarchy: string
+}
+
+interface RAGContextResponse {
+  status: string
+  summaries: RAGSummary
+}
+
+const POLICY_ITEMS = [
+  {
+    key: 'sales_discount_policy',
+    label: 'Sales Discount Policy',
+    icon: Icons.barChart,
+    iconColor: 'text-amber-500',
+  },
+  {
+    key: 'sales_pipeline_sop',
+    label: 'Sales Pipeline SOP',
+    icon: Icons.gitBranch,
+    iconColor: 'text-brand-cornflower',
+  },
+  {
+    key: 'org_hierarchy',
+    label: 'Org Hierarchy',
+    icon: Icons.users,
+    iconColor: 'text-brand-purple',
+  },
+]
+
+function ActiveGuardrails() {
+  const [policies, setPolicies] = useState<RAGSummary | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchPolicies = async () => {
+      try {
+        setIsLoading(true)
+        const response = await apiClient<RAGContextResponse>('/api/v1/nexus/rag-context', {
+          method: 'GET',
+        })
+        if (response.summaries) {
+          setPolicies(response.summaries)
+        }
+        setError(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load policies')
+        setPolicies(null)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchPolicies()
+  }, [])
+
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className='relative overflow-hidden shadow-glass'>
+        <CardWatermark opacity={3} scale={0.9} />
+        <CardHeader className='relative z-10'>
+          <CardTitle className='flex items-center gap-2'>
+            <Icons.shield className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
+            Active AI Guardrails
+          </CardTitle>
+          <p className='text-sm text-muted-foreground mt-1'>
+            Live policies currently enforced by the Supervity RAG capability.
+          </p>
+        </CardHeader>
+        <CardContent className='relative z-10 space-y-4'>
+          {isLoading && (
+            <div className='flex items-center justify-center py-6'>
+              <motion.div
+                className='h-4 w-4 rounded-full border-2 border-brand-cornflower border-t-transparent'
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
+              <p className='ml-2 text-sm text-muted-foreground'>Loading policies...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className='rounded-lg bg-red-50 p-3 border border-red-200'>
+              <p className='text-sm text-red-600'>⚠️ {error}</p>
+            </div>
+          )}
+
+          {policies && !isLoading && (
+            <div className='space-y-4'>
+              {POLICY_ITEMS.map((item, index) => {
+                const IconComponent = item.icon
+                const policyText = policies[item.key as keyof RAGSummary]
+
+                return (
+                  <motion.div
+                    key={item.key}
+                    variants={itemVariants}
+                    initial='hidden'
+                    animate='visible'
+                    transition={{ delay: index * 0.1 }}
+                    className='flex gap-3 rounded-lg bg-slate-50/50 p-3 hover:bg-slate-100/70 transition-colors'
+                  >
+                    {/* Icon */}
+                    <div className={cn('shrink-0 mt-0.5', item.iconColor)}>
+                      <IconComponent className='h-5 w-5' strokeWidth={1.5} />
+                    </div>
+
+                    {/* Content */}
+                    <div className='flex-1 min-w-0'>
+                      <p className='text-sm font-semibold text-foreground'>{item.label}</p>
+                      <p className='text-xs text-muted-foreground mt-1 line-clamp-3 leading-relaxed'>
+                        {policyText}
+                      </p>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
 // Main Dashboard — Command Center with integrated agent mesh
 export default function CommandCenterDashboard() {
   const [result, setResult] = useState<{ status: string; message: string; metadata?: unknown } | null>(null)
@@ -680,7 +809,7 @@ export default function CommandCenterDashboard() {
         initial='hidden'
         animate='visible'
       >
-        {/* Left Column (8 cols): Pipeline Tracker → Ingestion Engine → Dashboard Charts */}
+        {/* Left Column (8 cols): Pipeline Tracker → Ingestion Engine → Dashboard Charts → Active Guardrails */}
         <div className='lg:col-span-8 space-y-6'>
           {/* Pipeline Tracker */}
           <PipelineTracker status={pipelineStatus} />
@@ -690,10 +819,17 @@ export default function CommandCenterDashboard() {
 
           {/* Dashboard Charts */}
           <DashboardCharts />
+
+          {/* Active Guardrails */}
+          <ActiveGuardrails />
         </div>
 
-        {/* Right Column (4 cols): Exception Inbox */}
-        <div className='lg:col-span-4'>
+        {/* Right Column (4 cols): Active Guardrails + Exception Inbox */}
+        <div className='lg:col-span-4 space-y-6'>
+          {/* Active Guardrails */}
+          <ActiveGuardrails />
+
+          {/* Exception Inbox */}
           <ExceptionInbox />
         </div>
       </motion.div>
