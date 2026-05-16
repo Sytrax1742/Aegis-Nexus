@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..core.database import get_db
@@ -24,6 +24,7 @@ KNOWLEDGE_INGESTION_ID = "019e3056-6682-7000-81db-57be3cd39779"
 
 # Subordinate Agent Workflow IDs (passed to Orchestrator)
 WORKFLOW_IDS = {
+    "KNOWLEDGE_INGESTION": "019e3056-6682-7000-81db-57be3cd39779",
     "LEAD_INTEL": "019e3095-3378-7000-81f1-6f5dfee4b6ea",
     "POLICY_GUARD": "019e306a-34a6-7000-ab83-01ed37ef91a4",
     "CRM_OPS": "019e307e-2f53-7000-a9c8-25ae89119cf9",
@@ -51,26 +52,44 @@ class ResolveExceptionPayload(BaseModel):
 
 @router.post("/ingest-knowledge")
 async def ingest_knowledge(
-    payload: IngestKnowledgePayload,
+    sales_policy_file: UploadFile = File(..., description="Sales discount policy document"),
+    pipeline_sop_file: UploadFile = File(..., description="Sales pipeline SOP document"),
+    org_hierarchy_file: UploadFile = File(..., description="Organization hierarchy document"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Ingest corporate policies and procedures into the knowledge base.
+    Ingest corporate policies and procedures from file uploads into the knowledge base.
     
-    Calls the Knowledge Agent to process the document and stores the
+    Accepts three document files:
+    - sales_policy_file: Sales discount policy (txt, pdf, or doc)
+    - pipeline_sop_file: Sales pipeline SOP (txt, pdf, or doc)
+    - org_hierarchy_file: Organization hierarchy (txt, pdf, or doc)
+    
+    Calls the Knowledge Agent to process the documents and stores the
     resulting policy configuration in the settings table for use by
     the Orchestrator when processing deals.
     """
     try:
-        # Call the Knowledge Ingestion Agent with three distinct inputs
+        log.info(
+            f"Ingesting knowledge documents: "
+            f"{sales_policy_file.filename}, "
+            f"{pipeline_sop_file.filename}, "
+            f"{org_hierarchy_file.filename}"
+        )
+
+        # Prepare files dictionary for Supervity API
+        # Format: "inputs[field_name]": (filename, file_object, content_type)
+        files = {
+            "inputs[sales_discount_policy]": (sales_policy_file.filename, sales_policy_file.file, sales_policy_file.content_type),
+            "inputs[sales_pipeline_sop]": (pipeline_sop_file.filename, pipeline_sop_file.file, pipeline_sop_file.content_type),
+            "inputs[org_hierarchy]": (org_hierarchy_file.filename, org_hierarchy_file.file, org_hierarchy_file.content_type)
+        }
+
+        # Call the Knowledge Ingestion Agent with file uploads
         result = await supervity_service.execute_workflow(
-            workflow_id=KNOWLEDGE_INGESTION_ID,
-            inputs={
-                "sales_discount_policy": payload.sales_policy,
-                "sales_pipeline_sop": payload.pipeline_sop,
-                "org_hierarchy": payload.org_hierarchy,
-            },
+            workflow_id=WORKFLOW_IDS["KNOWLEDGE_INGESTION"],
+            files=files,
         )
 
         # Save the policy config to the settings table
@@ -98,7 +117,7 @@ async def ingest_knowledge(
         # Log the successful ingestion
         await audit.log(
             action="nexus.ingest_knowledge",
-            description="Knowledge documents ingested: sales policy, pipeline SOP, and org hierarchy",
+            description=f"Knowledge documents ingested from files: {sales_policy_file.filename}, {pipeline_sop_file.filename}, {org_hierarchy_file.filename}",
             actor=current_user,
             success=True,
             resource_type="policy_config",
@@ -107,7 +126,7 @@ async def ingest_knowledge(
 
         return {
             "status": "success",
-            "message": "Knowledge base updated with sales policy, pipeline SOP, and organization hierarchy",
+            "message": "Knowledge base updated with policy documents from file uploads",
             "policy_config": result,
         }
 

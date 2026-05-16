@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -16,11 +16,16 @@ export default function AdminSettingsPage() {
   const { data: session, status: sessionStatus } = useSession()
   const router = useRouter()
   
-  // Knowledge Trinity State
-  const [salesPolicy, setSalesPolicy] = useState('')
-  const [pipelineSop, setPipelineSop] = useState('')
-  const [orgHierarchy, setOrgHierarchy] = useState('')
+  // File Upload State
+  const [policyFile, setPolicyFile] = useState<File | null>(null)
+  const [sopFile, setSopFile] = useState<File | null>(null)
+  const [hierarchyFile, setHierarchyFile] = useState<File | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  
+  // File input refs
+  const policyFileInputRef = useRef<HTMLInputElement>(null)
+  const sopFileInputRef = useRef<HTMLInputElement>(null)
+  const hierarchyFileInputRef = useRef<HTMLInputElement>(null)
   
   const isAdmin = session?.roles?.includes('admin')
 
@@ -28,30 +33,44 @@ export default function AdminSettingsPage() {
     if (sessionStatus === 'unauthenticated') router.push('/auth/signin')
   }, [sessionStatus, router])
 
+  const handleFileChange = (file: File | null, setFile: (f: File | null) => void) => {
+    if (file && ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
+      setFile(file)
+    } else if (file) {
+      toast.error('Invalid File Type', { 
+        description: 'Please upload a .pdf, .txt, or .doc file.' 
+      })
+    }
+  }
+
   const handleSyncBrain = async () => {
-    if (!salesPolicy.trim() || !pipelineSop.trim() || !orgHierarchy.trim()) {
+    if (!policyFile || !sopFile || !hierarchyFile) {
       toast.error('Incomplete Knowledge Base', { 
-        description: 'All three knowledge documents are required.' 
+        description: 'All three document files are required.' 
       })
       return
     }
     
     setIsSyncing(true)
     try {
-      await apiClient.post('/api/v1/nexus/ingest-knowledge', {
-        sales_policy: salesPolicy,
-        pipeline_sop: pipelineSop,
-        org_hierarchy: orgHierarchy,
-      })
+      const formData = new FormData()
+      formData.append('sales_policy_file', policyFile)
+      formData.append('pipeline_sop_file', sopFile)
+      formData.append('org_hierarchy_file', hierarchyFile)
+
+      await apiClient.post('/api/v1/nexus/ingest-knowledge', formData)
       
       toast.success('Aegis Brain Updated', { 
         description: 'Orchestrator is now policy-aware.' 
       })
       
-      // Clear fields after successful sync
-      setSalesPolicy('')
-      setPipelineSop('')
-      setOrgHierarchy('')
+      // Clear files after successful sync
+      setPolicyFile(null)
+      setSopFile(null)
+      setHierarchyFile(null)
+      if (policyFileInputRef.current) policyFileInputRef.current.value = ''
+      if (sopFileInputRef.current) sopFileInputRef.current.value = ''
+      if (hierarchyFileInputRef.current) hierarchyFileInputRef.current.value = ''
     } catch (error) {
       toast.error('Sync Failed', { 
         description: error instanceof Error ? error.message : 'Could not connect to Supervity.' 
@@ -96,64 +115,127 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <CardContent className='relative z-10 space-y-6'>
           
-          {/* Field 1: Corporate Sales & Discount Policy */}
+          {/* File Upload 1: Corporate Sales & Discount Policy */}
           <motion.div 
             className='space-y-3'
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
-            <Label htmlFor='sales-policy' className='text-base font-semibold text-brand-navy'>
+            <Label htmlFor='policy-file' className='text-base font-semibold text-brand-navy'>
               Corporate Sales & Discount Policy
             </Label>
-            <textarea
-              id='sales-policy'
-              value={salesPolicy}
-              onChange={(e) => setSalesPolicy(e.target.value)}
-              placeholder='Paste your corporate sales policy, discount authorization matrix, and deal restrictions here...'
-              disabled={isSyncing}
-              className='w-full h-48 p-4 rounded-lg border border-border bg-background text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower focus:ring-offset-2 transition-all resize-none'
-            />
+            <div className='border-2 border-dashed border-border rounded-lg p-6 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer'
+              onClick={() => policyFileInputRef.current?.click()}
+            >
+              <input
+                ref={policyFileInputRef}
+                type='file'
+                accept='.pdf,.txt,.doc,.docx'
+                onChange={(e) => handleFileChange(e.target.files?.[0] || null, setPolicyFile)}
+                className='hidden'
+                disabled={isSyncing}
+              />
+              <div className='flex flex-col items-center gap-2'>
+                <Icons.upload className='h-8 w-8 text-muted-foreground' />
+                {policyFile ? (
+                  <div className='text-center'>
+                    <p className='text-sm font-medium text-foreground'>{policyFile.name}</p>
+                    <p className='text-xs text-muted-foreground'>{(policyFile.size / 1024).toFixed(2)} KB</p>
+                  </div>
+                ) : (
+                  <div className='text-center'>
+                    <p className='text-sm font-medium text-foreground'>Drop file here or click</p>
+                    <p className='text-xs text-muted-foreground'>PDF, TXT, or DOC</p>
+                  </div>
+                )}
+                <Button variant='outline' size='sm' type='button' disabled={isSyncing}>
+                  Choose File
+                </Button>
+              </div>
+            </div>
           </motion.div>
 
-          {/* Field 2: Sales Pipeline SOP */}
+          {/* File Upload 2: Sales Pipeline SOP */}
           <motion.div 
             className='space-y-3'
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.4 }}
           >
-            <Label htmlFor='pipeline-sop' className='text-base font-semibold text-brand-navy'>
+            <Label htmlFor='sop-file' className='text-base font-semibold text-brand-navy'>
               Sales Pipeline SOP
             </Label>
-            <textarea
-              id='pipeline-sop'
-              value={pipelineSop}
-              onChange={(e) => setPipelineSop(e.target.value)}
-              placeholder='Paste your sales pipeline stages, process steps, and stage-exit criteria here...'
-              disabled={isSyncing}
-              className='w-full h-48 p-4 rounded-lg border border-border bg-background text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower focus:ring-offset-2 transition-all resize-none'
-            />
+            <div className='border-2 border-dashed border-border rounded-lg p-6 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer'
+              onClick={() => sopFileInputRef.current?.click()}
+            >
+              <input
+                ref={sopFileInputRef}
+                type='file'
+                accept='.pdf,.txt,.doc,.docx'
+                onChange={(e) => handleFileChange(e.target.files?.[0] || null, setSopFile)}
+                className='hidden'
+                disabled={isSyncing}
+              />
+              <div className='flex flex-col items-center gap-2'>
+                <Icons.upload className='h-8 w-8 text-muted-foreground' />
+                {sopFile ? (
+                  <div className='text-center'>
+                    <p className='text-sm font-medium text-foreground'>{sopFile.name}</p>
+                    <p className='text-xs text-muted-foreground'>{(sopFile.size / 1024).toFixed(2)} KB</p>
+                  </div>
+                ) : (
+                  <div className='text-center'>
+                    <p className='text-sm font-medium text-foreground'>Drop file here or click</p>
+                    <p className='text-xs text-muted-foreground'>PDF, TXT, or DOC</p>
+                  </div>
+                )}
+                <Button variant='outline' size='sm' type='button' disabled={isSyncing}>
+                  Choose File
+                </Button>
+              </div>
+            </div>
           </motion.div>
 
-          {/* Field 3: Organization Hierarchy */}
+          {/* File Upload 3: Organization Hierarchy */}
           <motion.div 
             className='space-y-3'
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.4 }}
           >
-            <Label htmlFor='org-hierarchy' className='text-base font-semibold text-brand-navy'>
+            <Label htmlFor='hierarchy-file' className='text-base font-semibold text-brand-navy'>
               Organization Hierarchy
             </Label>
-            <textarea
-              id='org-hierarchy'
-              value={orgHierarchy}
-              onChange={(e) => setOrgHierarchy(e.target.value)}
-              placeholder='Paste your organizational structure, reporting lines, and approval authorities here...'
-              disabled={isSyncing}
-              className='w-full h-48 p-4 rounded-lg border border-border bg-background text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower focus:ring-offset-2 transition-all resize-none'
-            />
+            <div className='border-2 border-dashed border-border rounded-lg p-6 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer'
+              onClick={() => hierarchyFileInputRef.current?.click()}
+            >
+              <input
+                ref={hierarchyFileInputRef}
+                type='file'
+                accept='.pdf,.txt,.doc,.docx'
+                onChange={(e) => handleFileChange(e.target.files?.[0] || null, setHierarchyFile)}
+                className='hidden'
+                disabled={isSyncing}
+              />
+              <div className='flex flex-col items-center gap-2'>
+                <Icons.upload className='h-8 w-8 text-muted-foreground' />
+                {hierarchyFile ? (
+                  <div className='text-center'>
+                    <p className='text-sm font-medium text-foreground'>{hierarchyFile.name}</p>
+                    <p className='text-xs text-muted-foreground'>{(hierarchyFile.size / 1024).toFixed(2)} KB</p>
+                  </div>
+                ) : (
+                  <div className='text-center'>
+                    <p className='text-sm font-medium text-foreground'>Drop file here or click</p>
+                    <p className='text-xs text-muted-foreground'>PDF, TXT, or DOC</p>
+                  </div>
+                )}
+                <Button variant='outline' size='sm' type='button' disabled={isSyncing}>
+                  Choose File
+                </Button>
+              </div>
+            </div>
           </motion.div>
 
           {/* Sync Button */}
@@ -165,7 +247,7 @@ export default function AdminSettingsPage() {
           >
             <Button
               onClick={handleSyncBrain}
-              disabled={isSyncing || !salesPolicy.trim() || !pipelineSop.trim() || !orgHierarchy.trim()}
+              disabled={isSyncing || !policyFile || !sopFile || !hierarchyFile}
               variant='gradient'
               className='flex items-center gap-2'
             >

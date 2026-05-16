@@ -45,16 +45,21 @@ class SupervityService:
         self,
         workflow_id: str,
         inputs: dict,
+        files: dict = None,
     ) -> dict:
         """
         Execute a workflow on the Supervity AI engine.
 
         This method sends a multipart/form-data request to the Supervity API
         with the workflow ID and input parameters, then returns the parsed JSON response.
+        
+        Supports large string contents (e.g., document text) via form fields.
+        Supports file uploads alongside string inputs.
 
         Args:
             workflow_id: The ID of the workflow to execute (e.g., "policy_audit_v1")
             inputs: Dictionary of input parameters to pass to the workflow
+            files: Optional dictionary of files to upload (e.g., {"policy": file_object})
 
         Returns:
             dict: Parsed JSON response from the Supervity API
@@ -78,9 +83,19 @@ class SupervityService:
             }
 
             # Add all inputs as form fields (formatted as inputs[key] = value)
+            # Cast all values to strings to ensure proper multipart encoding
             for key, value in inputs.items():
                 form_field_name = f"inputs[{key}]"
-                form_data[form_field_name] = str(value)
+                # Handle large string contents (documents, transcripts, etc.)
+                if isinstance(value, (str, bytes)):
+                    # Convert bytes to string if needed
+                    if isinstance(value, bytes):
+                        form_data[form_field_name] = value.decode("utf-8")
+                    else:
+                        form_data[form_field_name] = value
+                else:
+                    # For other types (dict, list, etc.), convert to string
+                    form_data[form_field_name] = str(value)
 
             # Prepare headers
             headers = {
@@ -90,11 +105,12 @@ class SupervityService:
 
             log.debug(f"Sending request to {self.BASE_URL} with workflow {workflow_id}")
 
-            # Execute async HTTP request
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            # Execute async HTTP request with 120 second timeout for document processing
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
                     self.BASE_URL,
                     data=form_data,
+                    files=files,
                     headers=headers,
                 )
 
@@ -164,8 +180,8 @@ class SupervityService:
 
             log.debug(f"Sending resume request to {resume_url}")
 
-            # Execute async HTTP request
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            # Execute async HTTP request with 120 second timeout for workflow processing
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
                     resume_url,
                     json=input_data,
