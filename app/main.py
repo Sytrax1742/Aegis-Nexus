@@ -42,6 +42,7 @@ from .routers import (
     examples_router,
     health_router,
     items_router,
+    nexus_router,
 )
 from .security import get_current_user, verify_access
 
@@ -153,6 +154,9 @@ api_router.include_router(items_router)
 
 # Authorization pattern examples
 api_router.include_router(examples_router)
+
+# Aegis-Nexus AI Command Center
+api_router.include_router(nexus_router)
 
 
 # =============================================================================

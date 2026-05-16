@@ -25,82 +25,140 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 }
 
-// Sample workbench tools
-const tools = [
+// Demo exception data
+interface ExceptionItem {
+  id: string
+  alertType: 'POLICY_VIOLATION' | 'REVIEW_REQUIRED' | 'ESCALATION'
+  dealId: string
+  reason: string
+  timestamp: string
+}
+
+const DEMO_EXCEPTIONS: ExceptionItem[] = [
   {
-    id: 'ai-assistant',
-    title: 'AI Assistant',
-    description: 'Chat with your AI assistant for help with tasks',
-    icon: Icons.sparkles,
-    color: 'bg-gradient-to-br from-brand-navy to-brand-purple',
-    status: 'available',
-  },
-  {
-    id: 'automation',
-    title: 'Automation Builder',
-    description: 'Create and manage automated workflows',
-    icon: Icons.zap,
-    color: 'bg-gradient-to-br from-brand-cornflower to-brand-purple',
-    status: 'available',
-  },
-  {
-    id: 'analytics',
-    title: 'Analytics Dashboard',
-    description: 'View detailed analytics and reports',
-    icon: Icons.activity,
-    color: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
-    status: 'coming-soon',
-  },
-  {
-    id: 'integrations',
-    title: 'Integrations',
-    description: 'Connect with third-party services',
-    icon: Icons.share,
-    color: 'bg-gradient-to-br from-amber-500 to-orange-500',
-    status: 'coming-soon',
+    id: 'exc-1',
+    alertType: 'POLICY_VIOLATION',
+    dealId: 'DEAL-1042',
+    reason: 'Requested discount (35%) exceeds max tier (20%)',
+    timestamp: '2026-05-16 14:32:18',
   },
 ]
 
-function ToolCard({ tool }: { tool: (typeof tools)[0] }) {
-  const Icon = tool.icon
-  const isComingSoon = tool.status === 'coming-soon'
+// Alert type badge styling
+function getAlertBadgeStyles(alertType: ExceptionItem['alertType']) {
+  switch (alertType) {
+    case 'POLICY_VIOLATION':
+      return 'bg-red-100 text-red-700 border border-red-300'
+    case 'REVIEW_REQUIRED':
+      return 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+    case 'ESCALATION':
+      return 'bg-orange-100 text-orange-700 border border-orange-300'
+    default:
+      return 'bg-slate-100 text-slate-700 border border-slate-300'
+  }
+}
+
+function getAlertLabel(alertType: ExceptionItem['alertType']) {
+  return alertType.replace('_', ' ')
+}
+
+// Exception Queue Component
+function ExceptionQueue() {
+  const handleReviewDeal = (dealId: string) => {
+    // TODO: Implement review deal handler
+    console.log(`Reviewing deal: ${dealId}`)
+  }
 
   return (
     <motion.div variants={itemVariants}>
-      <Card
-        className={cn(
-          'h-full cursor-pointer transition-all duration-300',
-          isComingSoon && 'opacity-60'
-        )}
-      >
+      <Card className='relative overflow-hidden'>
         <CardHeader>
-          <div className='flex items-start justify-between'>
-            <div
-              className={cn(
-                'flex h-12 w-12 items-center justify-center rounded-xl text-white',
-                tool.color
-              )}
-            >
-              <Icon className='h-6 w-6' strokeWidth={1.5} />
-            </div>
-            {isComingSoon && (
-              <span className='rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-brand-muted'>
-                Coming Soon
-              </span>
-            )}
-          </div>
-          <CardTitle className='mt-4'>{tool.title}</CardTitle>
-          <CardDescription>{tool.description}</CardDescription>
+          <CardTitle className='flex items-center gap-2'>
+            <Icons.alertCircle className='h-5 w-5 text-red-500' strokeWidth={1.5} />
+            Exception Queue
+          </CardTitle>
+          <CardDescription>
+            {DEMO_EXCEPTIONS.length === 0
+              ? 'No active exceptions. All policies are compliant.'
+              : `${DEMO_EXCEPTIONS.length} policy violation(s) awaiting review`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            variant={isComingSoon ? 'outline' : 'default'}
-            className='w-full'
-            disabled={isComingSoon}
-          >
-            {isComingSoon ? 'Notify Me' : 'Open Tool'}
-            {!isComingSoon && <Icons.arrowRight className='ml-2 h-4 w-4' />}
-          </Button>
+          {DEMO_EXCEPTIONS.length === 0 ? (
+            <div className='flex flex-col items-center justify-center py-12 text-center'>
+              <Icons.checkCircle className='mb-4 h-12 w-12 text-emerald-500' strokeWidth={1.5} />
+              <p className='text-sm font-medium text-foreground'>No Exceptions</p>
+              <p className='mt-1 text-sm text-muted-foreground'>
+                All deals are compliant with active policies.
+              </p>
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className='w-full'>
+                <thead>
+                  <tr className='border-b border-slate-200'>
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-foreground'>
+                      Alert Type
+                    </th>
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-foreground'>
+                      Deal ID
+                    </th>
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-foreground'>
+                      Reason
+                    </th>
+                    <th className='px-4 py-3 text-left text-sm font-semibold text-foreground'>
+                      Timestamp
+                    </th>
+                    <th className='px-4 py-3 text-center text-sm font-semibold text-foreground'>
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DEMO_EXCEPTIONS.map((exception, index) => (
+                    <motion.tr
+                      key={exception.id}
+                      className='border-b border-slate-100 hover:bg-slate-50 transition-colors'
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <td className='px-4 py-3'>
+                        <span
+                          className={cn(
+                            'inline-block rounded px-2.5 py-1 text-xs font-semibold',
+                            getAlertBadgeStyles(exception.alertType)
+                          )}
+                        >
+                          {getAlertLabel(exception.alertType)}
+                        </span>
+                      </td>
+                      <td className='px-4 py-3 text-sm font-mono text-foreground'>
+                        {exception.dealId}
+                      </td>
+                      <td className='px-4 py-3 text-sm text-foreground'>
+                        <span className='max-w-xs'>{exception.reason}</span>
+                      </td>
+                      <td className='px-4 py-3 text-sm text-muted-foreground whitespace-nowrap'>
+                        {exception.timestamp}
+                      </td>
+                      <td className='px-4 py-3 text-center'>
+                        <Button
+                          size='sm'
+                          variant='default'
+                          onClick={() => handleReviewDeal(exception.dealId)}
+                          className='gap-2'
+                        >
+                          <Icons.eye className='h-4 w-4' strokeWidth={1.5} />
+                          Review Deal
+                        </Button>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
@@ -118,54 +176,15 @@ export default function WorkbenchPage() {
       {/* Header */}
       <motion.div variants={itemVariants}>
         <h1 className='text-display-3 font-bold tracking-tight text-brand-navy'>
-          Workbench
+          AI Workbench
         </h1>
         <p className='mt-2 text-lg text-muted-foreground'>
-          Access your AI tools and automation workflows.
+          Manual review queue for policy violations.
         </p>
       </motion.div>
 
-      {/* Tools Grid */}
-      <div className='grid gap-6 sm:grid-cols-2 lg:grid-cols-4'>
-        {tools.map((tool) => (
-          <ToolCard key={tool.id} tool={tool} />
-        ))}
-      </div>
-
-      {/* Quick Actions */}
-      <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
-            <CardTitle className='flex items-center gap-2'>
-              <Icons.zap className='h-5 w-5 text-brand-cornflower' />
-              Quick Actions
-            </CardTitle>
-            <CardDescription>
-              Frequently used actions for faster access
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className='flex flex-wrap gap-3'>
-              <Button variant='outline' size='sm'>
-                <Icons.plus className='mr-2 h-4 w-4' />
-                New Task
-              </Button>
-              <Button variant='outline' size='sm'>
-                <Icons.fileText className='mr-2 h-4 w-4' />
-                Generate Report
-              </Button>
-              <Button variant='outline' size='sm'>
-                <Icons.mail className='mr-2 h-4 w-4' />
-                Send Notification
-              </Button>
-              <Button variant='outline' size='sm'>
-                <Icons.download className='mr-2 h-4 w-4' />
-                Export Data
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      {/* Exception Queue */}
+      <ExceptionQueue />
     </motion.div>
   )
 }

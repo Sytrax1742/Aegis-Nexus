@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { motion, useInView, AnimatePresence } from 'framer-motion'
 import apiClient from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardWatermark } from '@/components/ui/card-watermark'
 import { Icons } from '@/components/ui/icons'
-import { ActivityChart } from '@/components/ActivityChart'
 import { cn } from '@/lib/utils'
 
 // Animation variants
@@ -183,8 +182,8 @@ function HeroSection({ userName }: { userName?: string }) {
       transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       <h1 className='text-display-3 font-bold tracking-tight text-brand-navy lg:text-display-2'>
-        Where Intelligence <br className='hidden sm:block' />
-        <span className='text-gradient'>Meets Human.</span>
+        Aegis-Nexus <br className='hidden sm:block' />
+        <span className='text-gradient'>Revenue Command Center</span>
       </h1>
       <p className='mt-4 text-lg font-light text-muted-foreground'>
         Welcome back, {firstName}. Your AI Command Center is ready.
@@ -193,108 +192,313 @@ function HeroSection({ userName }: { userName?: string }) {
   )
 }
 
-// Diagnostics Card
-function DiagnosticsCard() {
-  const [apiResponse, setApiResponse] = useState<string>('')
-  const [adminResponse, setAdminResponse] = useState<string>('')
+// Ingestion Engine Component - Zone 1 Trigger Area
+function IngestionEngine({
+  result,
+  onResultChange,
+}: {
+  result: { status: string; message: string; metadata?: unknown } | null
+  onResultChange: (result: { status: string; message: string; metadata?: unknown } | null) => void
+}) {
+  const [transcript, setTranscript] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const callApi = async (
-    endpoint: string,
-    setter: React.Dispatch<React.SetStateAction<string>>
-  ) => {
+  const handleExecute = async () => {
+    if (!transcript.trim()) {
+      onResultChange({
+        status: 'error',
+        message: '⚠️ Please enter a transcript to process',
+      })
+      return
+    }
+
     setIsLoading(true)
-    setter('Loading...')
+    onResultChange(null)
+
     try {
-      const data = await apiClient(endpoint)
-      setter(JSON.stringify(data, null, 2))
+      const response = await apiClient('/api/v1/nexus/ingest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcript }),
+      })
+
+      onResultChange(response as { status: string; message: string; metadata?: unknown })
+
+      // Clear transcript on success
+      if (response.status === 'success') {
+        setTranscript('')
+      }
     } catch (error) {
-      setter(
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      )
+      onResultChange({
+        status: 'error',
+        message: `Error: ${error instanceof Error ? error.message : 'Failed to process transcript'}`,
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
+  const getAlertStyles = (status: string) => {
+    switch (status) {
+      case 'exception':
+        return 'border-red-500 bg-red-50 text-red-900'
+      case 'success':
+        return 'border-emerald-500 bg-emerald-50 text-emerald-900'
+      case 'error':
+        return 'border-yellow-500 bg-yellow-50 text-yellow-900'
+      default:
+        return 'border-slate-300 bg-slate-50 text-slate-900'
+    }
+  }
+
   return (
-    <Card className='relative col-span-12 h-full overflow-hidden'>
-      <CardWatermark opacity={3} scale={1.1} />
-      <CardHeader className='relative z-10'>
-        <CardTitle className='flex items-center gap-2'>
-          <Icons.activity
-            className='h-5 w-5 text-brand-cornflower'
-            strokeWidth={1.5}
-          />
-          System Diagnostics
-        </CardTitle>
-      </CardHeader>
-      <CardContent className='relative z-10 space-y-6'>
-        <div className='space-y-3'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <p className='text-sm font-medium text-foreground'>
-                Standard Authorization
-              </p>
-              <p className='mt-0.5 font-mono text-xs text-muted-foreground'>
-                /api/test
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={() => callApi('/api/test', setApiResponse)}
-            disabled={isLoading}
-            variant='outline'
-            className='w-full'
-          >
-            {isLoading ? 'Running...' : 'Run Diagnostics'}
-          </Button>
-          {apiResponse && (
-            <div className='rounded-xl border border-border/50 bg-muted/30 p-4'>
-              <pre className='overflow-x-auto font-mono text-xs text-muted-foreground'>
-                <code>{apiResponse}</code>
-              </pre>
-            </div>
-          )}
-        </div>
+    <motion.div variants={itemVariants}>
+      <Card className='relative overflow-hidden'>
+        <CardWatermark opacity={3} scale={0.9} />
+        <CardHeader className='relative z-10'>
+          <CardTitle className='flex items-center gap-2'>
+            <Icons.zap className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
+            Ingest Sales Call Transcript
+          </CardTitle>
+        </CardHeader>
+        <CardContent className='relative z-10 space-y-4'>
+          {/* Alert Banner */}
+          <AnimatePresence mode='wait'>
+            {result && (
+              <motion.div
+                key='alert'
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className={cn(
+                  'overflow-hidden rounded-lg border-l-4 p-4 text-sm',
+                  getAlertStyles(result.status)
+                )}
+              >
+                <p className='font-medium'>{result.message}</p>
+                {result.metadata && (
+                  <p className='mt-2 text-xs opacity-75'>
+                    {JSON.stringify(result.metadata, null, 2)}
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        <div className='h-px bg-border/50' />
-
-        <div className='space-y-3'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <p className='text-sm font-medium text-foreground'>
-                Admin Verification
-              </p>
-              <p className='mt-0.5 font-mono text-xs text-muted-foreground'>
-                /api/admin/dashboard
-              </p>
-            </div>
+          {/* Textarea */}
+          <div className='space-y-2'>
+            <label className='text-sm font-medium text-foreground'>Transcript</label>
+            <textarea
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              disabled={isLoading}
+              placeholder='Paste your sales call transcript here...'
+              className='min-h-32 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+            />
           </div>
+
+          {/* Execute Button */}
           <Button
-            onClick={() => callApi('/api/admin/dashboard', setAdminResponse)}
-            disabled={isLoading}
+            onClick={handleExecute}
+            disabled={isLoading || !transcript.trim()}
             variant='gradient'
             className='w-full'
           >
-            {isLoading ? 'Verifying...' : 'Verify Admin Access'}
-            <Icons.arrowRight className='ml-2 h-4 w-4' />
+            {isLoading ? (
+              <>
+                <motion.div
+                  className='mr-2 h-4 w-4 rounded-full border-2 border-white border-t-transparent'
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Icons.play className='mr-2 h-4 w-4' strokeWidth={1.5} />
+                Execute Pipeline
+              </>
+            )}
           </Button>
-          {adminResponse && (
-            <div className='rounded-xl border border-border/50 bg-muted/30 p-4'>
-              <pre className='overflow-x-auto font-mono text-xs text-muted-foreground'>
-                <code>{adminResponse}</code>
-              </pre>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+// Pipeline Tracker Component - Zone 3 Pipeline Visualization
+interface PipelineStep {
+  id: number
+  name: string
+  description: string
+}
+
+const PIPELINE_STEPS: PipelineStep[] = [
+  { id: 1, name: 'Lead Intel', description: 'Extract prospect data' },
+  { id: 2, name: 'Policy Guard', description: 'Validate rules (RAG)' },
+  { id: 3, name: 'CRM Ops', description: 'Sync to CRM' },
+  { id: 4, name: 'Doc Ops', description: 'Generate docs' },
+  { id: 5, name: 'Comms', description: 'Send notifications' },
+]
+
+function PipelineTracker({
+  status = 'idle',
+}: {
+  status?: 'idle' | 'pending' | 'success' | 'workbench_halt' | 'error'
+}) {
+  const getStepStyles = (stepId: number) => {
+    const isHalted = status === 'workbench_halt'
+    const isSuccess = status === 'success'
+    const isPending = status === 'pending'
+
+    // Policy Guard (step 2) - special handling for workbench_halt
+    if (stepId === 2) {
+      if (isHalted) {
+        return 'bg-red-500 text-white shadow-lg'
+      }
+      if (isSuccess) {
+        return 'bg-emerald-500 text-white'
+      }
+      if (isPending) {
+        return 'bg-blue-400 text-white'
+      }
+      return 'bg-slate-300 text-slate-600'
+    }
+
+    // Steps 3-5: gray/disabled if workbench_halt
+    if (isHalted && stepId > 2) {
+      return 'bg-slate-200 text-slate-400'
+    }
+
+    // Success: all steps green
+    if (isSuccess) {
+      return 'bg-emerald-500 text-white'
+    }
+
+    // Pending: steps 1-2 active
+    if (isPending && stepId <= 2) {
+      return 'bg-blue-400 text-white'
+    }
+
+    // Default: gray
+    return 'bg-slate-300 text-slate-600'
+  }
+
+  const getConnectorStyles = (stepId: number) => {
+    const isHalted = status === 'workbench_halt'
+    const isSuccess = status === 'success'
+    const isPending = status === 'pending'
+
+    // If workbench_halt at step 2, disable connectors after
+    if (isHalted && stepId >= 2) {
+      return 'bg-slate-200'
+    }
+
+    if (isSuccess && stepId < 5) {
+      return 'bg-emerald-500'
+    }
+
+    if (isPending && stepId < 2) {
+      return 'bg-blue-400'
+    }
+
+    return 'bg-slate-300'
+  }
+
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className='relative overflow-hidden'>
+        <CardWatermark opacity={3} scale={0.9} />
+        <CardHeader className='relative z-10'>
+          <CardTitle className='flex items-center gap-2'>
+            <Icons.layers className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
+            Supervity Pipeline
+          </CardTitle>
+        </CardHeader>
+        <CardContent className='relative z-10 space-y-6'>
+          {/* Pipeline Stepper */}
+          <div className='space-y-6'>
+            {PIPELINE_STEPS.map((step, index) => (
+              <div key={step.id}>
+                {/* Step */}
+                <motion.div
+                  className='flex items-start gap-4'
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  {/* Circle Badge */}
+                  <motion.div
+                    className={cn(
+                      'flex h-10 w-10 items-center justify-center rounded-full font-bold text-sm shrink-0',
+                      getStepStyles(step.id)
+                    )}
+                    animate={status === 'workbench_halt' && step.id === 2 ? { scale: [1, 1.1, 1] } : {}}
+                    transition={status === 'workbench_halt' && step.id === 2 ? { duration: 1, repeat: Infinity } : {}}
+                  >
+                    {step.id}
+                  </motion.div>
+
+                  {/* Content */}
+                  <div className='flex-1 pt-0.5'>
+                    <p className='font-semibold text-sm text-foreground'>{step.name}</p>
+                    <p className='text-xs text-muted-foreground'>{step.description}</p>
+                  </div>
+                </motion.div>
+
+                {/* Connector Line (not after last step) */}
+                {index < PIPELINE_STEPS.length - 1 && (
+                  <motion.div
+                    className={cn('ml-5 h-6 w-0.5 my-1', getConnectorStyles(step.id))}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 24 }}
+                    transition={{ delay: index * 0.1 + 0.05 }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Status Badge */}
+          <div className='rounded-lg bg-slate-50 p-3 text-center text-sm'>
+            {status === 'idle' && (
+              <p className='text-slate-600'>Ready to ingest transcript</p>
+            )}
+            {status === 'pending' && (
+              <p className='text-blue-600 font-medium'>Processing through Lead Intel...</p>
+            )}
+            {status === 'workbench_halt' && (
+              <p className='text-red-600 font-medium'>⚠️ Policy violation - halted at Policy Guard</p>
+            )}
+            {status === 'success' && (
+              <p className='text-emerald-600 font-medium'>✓ Pipeline completed successfully</p>
+            )}
+            {status === 'error' && (
+              <p className='text-yellow-600 font-medium'>Error processing transcript</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 
 // Main Dashboard — no auth required, renders directly
 export default function HomePage() {
+  const [result, setResult] = useState<{ status: string; message: string; metadata?: unknown } | null>(null)
+
+  // Map backend status to pipeline status
+  const getPipelineStatus = (backendStatus?: string): 'idle' | 'pending' | 'success' | 'workbench_halt' | 'error' => {
+    if (!backendStatus) return 'idle'
+    if (backendStatus === 'workbench_halt') return 'workbench_halt'
+    if (backendStatus === 'success') return 'success'
+    if (backendStatus === 'error') return 'error'
+    return 'idle'
+  }
+
   return (
     <motion.div
       className='space-y-6'
@@ -305,56 +509,58 @@ export default function HomePage() {
       {/* Hero Section */}
       <HeroSection userName='Developer' />
 
-      {/* Stats Grid - Bento style */}
+      {/* Zone 2: Pipeline Insights - Stats Grid */}
       <div className='grid grid-cols-2 gap-4 lg:grid-cols-4'>
         <StatCard
-          title='Total Users'
-          value={10400}
-          icon={Icons.users}
-          trend={{ value: '+12%', positive: true }}
+          title='Deals Processed'
+          value={1248}
+          icon={Icons.folderOpen}
           colorClass='bg-brand-navy'
           delay={0.1}
         />
         <StatCard
-          title='Active Sessions'
-          value={524}
+          title='Auto-Revenue Secured'
+          value={4200}
+          suffix='k'
           icon={Icons.activity}
-          trend={{ value: '+8%', positive: true }}
           colorClass='bg-brand-cornflower'
           delay={0.2}
         />
         <StatCard
-          title='Success Rate'
-          value={98}
-          suffix='%'
-          icon={Icons.checkCircle}
-          trend={{ value: '+2%', positive: true }}
-          colorClass='bg-brand-purple'
+          title='Exceptions Caught'
+          value={34}
+          icon={Icons.shield}
+          colorClass='bg-red-500'
           delay={0.3}
         />
         <StatCard
-          title='AI Confidence'
-          value={96}
+          title='SLA Compliance'
+          value={99}
           suffix='%'
-          icon={Icons.sparkles}
-          trend={{ value: 'Stable', positive: true }}
-          colorClass='bg-gradient-to-br from-brand-navy to-brand-purple'
+          icon={Icons.checkCircle}
+          colorClass='bg-brand-purple'
           delay={0.4}
         />
       </div>
 
-      {/* Activity Chart - Full Width */}
-      <motion.div variants={itemVariants}>
-        <ActivityChart className='col-span-12' />
-      </motion.div>
-
-      {/* System Diagnostics */}
+      {/* Zone 1 & 3: Trigger + Pipeline */}
       <motion.div
         className='grid gap-6 lg:grid-cols-12'
-        variants={itemVariants}
+        variants={containerVariants}
+        initial='hidden'
+        animate='visible'
       >
-        <DiagnosticsCard />
+        {/* Zone 1: Ingestion Engine (7 cols) */}
+        <div className='lg:col-span-7'>
+          <IngestionEngine result={result} onResultChange={setResult} />
+        </div>
+
+        {/* Zone 3: Pipeline Tracker (5 cols) */}
+        <div className='lg:col-span-5'>
+          <PipelineTracker status={getPipelineStatus(result?.status)} />
+        </div>
       </motion.div>
     </motion.div>
   )
 }
+
