@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardWatermark } from '@/components/ui/card-watermark'
 import { Icons } from '@/components/ui/icons'
 import { cn } from '@/lib/utils'
+import { DashboardCharts } from '@/components/ActivityChart'
 
 // Animation variants
 const containerVariants = {
@@ -329,48 +330,47 @@ function IngestionEngine({
   )
 }
 
-// Pipeline Tracker Component - Zone 3 Pipeline Visualization
-interface PipelineStep {
+// Pipeline Tracker Component - Horizontal Agent Mesh Stepper
+interface Agent {
   id: number
   name: string
-  description: string
 }
 
-const PIPELINE_STEPS: PipelineStep[] = [
-  { id: 1, name: 'Lead Intel', description: 'Extract prospect data' },
-  { id: 2, name: 'Policy Guard', description: 'Validate rules (RAG)' },
-  { id: 3, name: 'CRM Ops', description: 'Sync to CRM' },
-  { id: 4, name: 'Doc Ops', description: 'Generate docs' },
-  { id: 5, name: 'Comms', description: 'Send notifications' },
+const AGENTS: Agent[] = [
+  { id: 1, name: 'Orchestrator' },
+  { id: 2, name: 'Lead Intel' },
+  { id: 3, name: 'Policy Guard' },
+  { id: 4, name: 'CRM Ops' },
+  { id: 5, name: 'Comms' },
 ]
 
 function PipelineTracker({
   status = 'idle',
 }: {
-  status?: 'idle' | 'pending' | 'success' | 'workbench_halt' | 'error'
+  status?: 'idle' | 'processing' | 'success' | 'halted'
 }) {
   const getStepStyles = (stepId: number) => {
-    const isHalted = status === 'workbench_halt'
+    const isHalted = status === 'halted'
     const isSuccess = status === 'success'
-    const isPending = status === 'pending'
+    const isProcessing = status === 'processing'
 
-    // Policy Guard (step 2) - special handling for workbench_halt
-    if (stepId === 2) {
+    // Policy Guard (step 3) - special handling for halted
+    if (stepId === 3) {
       if (isHalted) {
-        return 'bg-red-500 text-white shadow-lg'
+        return 'bg-red-500 text-white ring-2 ring-red-500/30'
       }
       if (isSuccess) {
         return 'bg-emerald-500 text-white'
       }
-      if (isPending) {
-        return 'bg-blue-400 text-white'
+      if (isProcessing) {
+        return 'bg-brand-cornflower text-brand-navy'
       }
-      return 'bg-slate-300 text-slate-600'
+      return 'bg-slate-200 text-slate-600'
     }
 
-    // Steps 3-5: gray/disabled if workbench_halt
-    if (isHalted && stepId > 2) {
-      return 'bg-slate-200 text-slate-400'
+    // Steps 4-5: gray/disabled if halted
+    if (isHalted && stepId > 3) {
+      return 'bg-slate-100 text-slate-400'
     }
 
     // Success: all steps green
@@ -378,126 +378,256 @@ function PipelineTracker({
       return 'bg-emerald-500 text-white'
     }
 
-    // Pending: steps 1-2 active
-    if (isPending && stepId <= 2) {
-      return 'bg-blue-400 text-white'
+    // Processing: steps up to current active are cornflower
+    if (isProcessing) {
+      return 'bg-brand-cornflower text-brand-navy'
     }
 
-    // Default: gray
-    return 'bg-slate-300 text-slate-600'
+    // Default: idle gray
+    return 'bg-slate-200 text-slate-600'
   }
 
   const getConnectorStyles = (stepId: number) => {
-    const isHalted = status === 'workbench_halt'
+    const isHalted = status === 'halted'
     const isSuccess = status === 'success'
-    const isPending = status === 'pending'
+    const isProcessing = status === 'processing'
 
-    // If workbench_halt at step 2, disable connectors after
-    if (isHalted && stepId >= 2) {
-      return 'bg-slate-200'
+    // If halted at step 3, disable connectors after
+    if (isHalted && stepId >= 3) {
+      return 'bg-slate-100'
     }
 
-    if (isSuccess && stepId < 5) {
+    if (isSuccess) {
       return 'bg-emerald-500'
     }
 
-    if (isPending && stepId < 2) {
-      return 'bg-blue-400'
+    if (isProcessing) {
+      return 'bg-brand-cornflower'
     }
 
-    return 'bg-slate-300'
+    return 'bg-slate-200'
   }
 
   return (
     <motion.div variants={itemVariants}>
-      <Card className='relative overflow-hidden'>
+      <Card className='relative overflow-hidden shadow-glass'>
         <CardWatermark opacity={3} scale={0.9} />
         <CardHeader className='relative z-10'>
           <CardTitle className='flex items-center gap-2'>
-            <Icons.layers className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
-            Supervity Pipeline
+            <Icons.network className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
+            Supervity Agent Mesh
           </CardTitle>
         </CardHeader>
         <CardContent className='relative z-10 space-y-6'>
-          {/* Pipeline Stepper */}
-          <div className='space-y-6'>
-            {PIPELINE_STEPS.map((step, index) => (
-              <div key={step.id}>
-                {/* Step */}
+          {/* Horizontal Stepper */}
+          <div className='flex items-center gap-2'>
+            {AGENTS.map((agent, index) => (
+              <div key={agent.id} className='flex items-center flex-1'>
+                {/* Step Circle */}
                 <motion.div
-                  className='flex items-start gap-4'
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
+                  className={cn(
+                    'flex h-12 w-12 items-center justify-center rounded-full font-bold text-sm shrink-0 transition-all',
+                    getStepStyles(agent.id)
+                  )}
+                  animate={
+                    status === 'halted' && agent.id === 3
+                      ? { scale: [1, 1.05, 1] }
+                      : status === 'processing'
+                        ? { scale: [1, 1.08, 1] }
+                        : {}
+                  }
+                  transition={
+                    status === 'halted' && agent.id === 3
+                      ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+                      : status === 'processing'
+                        ? { duration: 0.6, repeat: Infinity, ease: 'easeInOut' }
+                        : {}
+                  }
                 >
-                  {/* Circle Badge */}
-                  <motion.div
-                    className={cn(
-                      'flex h-10 w-10 items-center justify-center rounded-full font-bold text-sm shrink-0',
-                      getStepStyles(step.id)
-                    )}
-                    animate={status === 'workbench_halt' && step.id === 2 ? { scale: [1, 1.1, 1] } : {}}
-                    transition={status === 'workbench_halt' && step.id === 2 ? { duration: 1, repeat: Infinity } : {}}
-                  >
-                    {step.id}
-                  </motion.div>
-
-                  {/* Content */}
-                  <div className='flex-1 pt-0.5'>
-                    <p className='font-semibold text-sm text-foreground'>{step.name}</p>
-                    <p className='text-xs text-muted-foreground'>{step.description}</p>
-                  </div>
+                  {status === 'success' && (
+                    <Icons.check className='h-5 w-5' strokeWidth={2} />
+                  )}
+                  {status === 'halted' && agent.id === 3 && (
+                    <Icons.alertCircle className='h-5 w-5' strokeWidth={2} />
+                  )}
+                  {(status === 'idle' || status === 'processing') && agent.id}
                 </motion.div>
 
-                {/* Connector Line (not after last step) */}
-                {index < PIPELINE_STEPS.length - 1 && (
+                {/* Connector (not after last step) */}
+                {index < AGENTS.length - 1 && (
                   <motion.div
-                    className={cn('ml-5 h-6 w-0.5 my-1', getConnectorStyles(step.id))}
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 24 }}
-                    transition={{ delay: index * 0.1 + 0.05 }}
+                    className={cn('h-1 flex-1 mx-1 rounded-full transition-all', getConnectorStyles(agent.id))}
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: index * 0.1, duration: 0.4 }}
                   />
                 )}
               </div>
             ))}
           </div>
 
-          {/* Status Badge */}
-          <div className='rounded-lg bg-slate-50 p-3 text-center text-sm'>
-            {status === 'idle' && (
-              <p className='text-slate-600'>Ready to ingest transcript</p>
-            )}
-            {status === 'pending' && (
-              <p className='text-blue-600 font-medium'>Processing through Lead Intel...</p>
-            )}
-            {status === 'workbench_halt' && (
-              <p className='text-red-600 font-medium'>⚠️ Policy violation - halted at Policy Guard</p>
-            )}
-            {status === 'success' && (
-              <p className='text-emerald-600 font-medium'>✓ Pipeline completed successfully</p>
-            )}
-            {status === 'error' && (
-              <p className='text-yellow-600 font-medium'>Error processing transcript</p>
-            )}
+          {/* Agent Labels */}
+          <div className='flex items-center gap-2'>
+            {AGENTS.map((agent, index) => (
+              <div key={`label-${agent.id}`} className='flex items-center flex-1'>
+                <motion.p
+                  className={cn(
+                    'text-xs font-medium text-center transition-colors',
+                    status === 'success' ? 'text-emerald-600' :
+                    status === 'halted' && agent.id === 3 ? 'text-red-600' :
+                    status === 'halted' && agent.id > 3 ? 'text-slate-400' :
+                    status === 'processing' ? 'text-brand-cornflower' :
+                    'text-slate-600'
+                  )}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  {agent.name}
+                </motion.p>
+                {index < AGENTS.length - 1 && <div className='flex-1' />}
+              </div>
+            ))}
           </div>
+
+          {/* Status Badge */}
+          <AnimatePresence mode='wait'>
+            <motion.div
+              key={status}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className='rounded-lg p-3 text-center text-sm font-medium'
+            >
+              {status === 'idle' && (
+                <p className='text-slate-600 bg-slate-50'>Awaiting transcript ingestion</p>
+              )}
+              {status === 'processing' && (
+                <p className='text-brand-cornflower bg-brand-cornflower/5'>
+                  <motion.span
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    ◆ Processing through Agent Mesh...
+                  </motion.span>
+                </p>
+              )}
+              {status === 'halted' && (
+                <p className='text-red-600 bg-red-50 border border-red-200'>
+                  ⚠️ HALTED at Policy Guard (RAG) — VP Review Required
+                </p>
+              )}
+              {status === 'success' && (
+                <p className='text-emerald-600 bg-emerald-50'>
+                  ✓ Pipeline completed successfully
+                </p>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </CardContent>
       </Card>
     </motion.div>
   )
 }
 
-// Main Dashboard — no auth required, renders directly
-export default function HomePage() {
+// Exception Inbox Component - Action items requiring VP approval
+interface ExceptionItem {
+  id: string
+  company: string
+  reason: string
+  time: string
+  type: 'POLICY_VIOLATION' | 'BANT_FAILURE'
+}
+
+const EXCEPTION_ITEMS: ExceptionItem[] = [
+  {
+    id: 'DEAL-1042',
+    company: 'Acme Corp',
+    reason: 'Requested discount (35%) exceeds max tier (20%).',
+    time: 'Just now',
+    type: 'POLICY_VIOLATION',
+  },
+  {
+    id: 'LEAD-883',
+    company: 'CloudNet',
+    reason: 'Missing Budget (BANT failure).',
+    time: '2h ago',
+    type: 'BANT_FAILURE',
+  },
+]
+
+function ExceptionInbox() {
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className='relative overflow-hidden shadow-glass'>
+        <CardWatermark opacity={3} scale={0.9} />
+        <CardHeader className='relative z-10'>
+          <CardTitle className='flex items-center gap-2'>
+            <Icons.alertCircle className='h-5 w-5 text-red-500' strokeWidth={1.5} />
+            Action Inbox
+          </CardTitle>
+          <p className='text-sm text-muted-foreground mt-1'>Requires VP Approval</p>
+        </CardHeader>
+        <CardContent className='relative z-10 space-y-3'>
+          {EXCEPTION_ITEMS.map((item, index) => (
+            <motion.div
+              key={item.id}
+              variants={itemVariants}
+              initial='hidden'
+              animate='visible'
+              transition={{ delay: index * 0.1 }}
+              className='flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/50 p-3 hover:bg-slate-100/70 transition-colors'
+            >
+              {/* Pulse Indicator */}
+              {item.type === 'POLICY_VIOLATION' && (
+                <motion.div
+                  className='mt-1 h-2 w-2 rounded-full bg-red-500 shrink-0'
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+              )}
+              {item.type === 'BANT_FAILURE' && (
+                <div className='mt-1 h-2 w-2 rounded-full bg-yellow-500 shrink-0' />
+              )}
+
+              {/* Content */}
+              <div className='flex-1 min-w-0'>
+                <div className='flex items-start justify-between gap-2'>
+                  <div className='flex-1'>
+                    <p className='text-sm font-semibold text-foreground'>{item.company}</p>
+                    <p className='text-xs text-muted-foreground mt-0.5 line-clamp-2'>{item.reason}</p>
+                    <p className='text-xs text-muted-foreground/70 mt-1'>{item.time}</p>
+                  </div>
+                  <p className='text-xs font-mono text-muted-foreground shrink-0'>{item.id}</p>
+                </div>
+              </div>
+
+              {/* Review Button */}
+              <Button variant='outline' size='sm' className='shrink-0 mt-1'>
+                Review
+              </Button>
+            </motion.div>
+          ))}
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+// Main Dashboard — Command Center with integrated agent mesh
+export default function CommandCenterDashboard() {
   const [result, setResult] = useState<{ status: string; message: string; metadata?: unknown } | null>(null)
 
-  // Map backend status to pipeline status
-  const getPipelineStatus = (backendStatus?: string): 'idle' | 'pending' | 'success' | 'workbench_halt' | 'error' => {
+  // Derive pipeline status from ingestion result
+  const getPipelineStatus = (backendStatus?: string): 'idle' | 'processing' | 'success' | 'halted' => {
     if (!backendStatus) return 'idle'
-    if (backendStatus === 'workbench_halt') return 'workbench_halt'
+    if (backendStatus === 'workbench_halt') return 'halted'
     if (backendStatus === 'success') return 'success'
-    if (backendStatus === 'error') return 'error'
+    if (backendStatus === 'pending') return 'processing'
     return 'idle'
   }
+
+  const pipelineStatus = getPipelineStatus(result?.status)
 
   return (
     <motion.div
@@ -509,7 +639,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <HeroSection userName='Developer' />
 
-      {/* Zone 2: Pipeline Insights - Stats Grid */}
+      {/* Top Row: Stats Grid */}
       <div className='grid grid-cols-2 gap-4 lg:grid-cols-4'>
         <StatCard
           title='Deals Processed'
@@ -543,21 +673,28 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Zone 1 & 3: Trigger + Pipeline */}
+      {/* Main Grid: Left (8 cols) + Right (4 cols) */}
       <motion.div
         className='grid gap-6 lg:grid-cols-12'
         variants={containerVariants}
         initial='hidden'
         animate='visible'
       >
-        {/* Zone 1: Ingestion Engine (7 cols) */}
-        <div className='lg:col-span-7'>
+        {/* Left Column (8 cols): Pipeline Tracker → Ingestion Engine → Dashboard Charts */}
+        <div className='lg:col-span-8 space-y-6'>
+          {/* Pipeline Tracker */}
+          <PipelineTracker status={pipelineStatus} />
+
+          {/* Ingestion Engine */}
           <IngestionEngine result={result} onResultChange={setResult} />
+
+          {/* Dashboard Charts */}
+          <DashboardCharts />
         </div>
 
-        {/* Zone 3: Pipeline Tracker (5 cols) */}
-        <div className='lg:col-span-5'>
-          <PipelineTracker status={getPipelineStatus(result?.status)} />
+        {/* Right Column (4 cols): Exception Inbox */}
+        <div className='lg:col-span-4'>
+          <ExceptionInbox />
         </div>
       </motion.div>
     </motion.div>
