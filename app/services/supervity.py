@@ -13,7 +13,17 @@ from typing import Optional
 log = logging.getLogger(__name__)
 
 
-class SupervityClient:
+WORKFLOW_IDS = {
+    "KNOWLEDGE_INGESTION": "019e3056-6682-7000-81db-57be3cd39779",
+    "LEAD_INTEL": "019e3095-3378-7000-81f1-6f5dfee4b6ea",
+    "POLICY_GUARD": "019e306a-34a6-7000-ab83-01ed37ef91a4",
+    "CRM_OPS": "019e307e-2f53-7000-a9c8-25ae89119cf9",
+    "DOC_OPS": "019e3089-2ae9-7000-90c5-f6e1e1269002",
+    "COMMS_OPS": "019e308d-dd05-7000-b8ae-2035b6e5b65c"
+}
+
+
+class SupervityService:
     """
     Async client for Supervity AI workflow execution.
     
@@ -24,12 +34,12 @@ class SupervityClient:
     BASE_URL = "https://auto-workflow-api.supervity.ai/api/v1/workflow-runs/execute/stream"
 
     def __init__(self):
-        """Initialize the Supervity client with API token from environment."""
+        """Initialize the Supervity service with API token from environment."""
         self.token = os.getenv("SUPERVITY_TOKEN")
         if not self.token:
             log.warning("SUPERVITY_TOKEN not set. Supervity workflows will not be executed.")
         else:
-            log.info("SupervityClient initialized with SUPERVITY_TOKEN")
+            log.info("SupervityService initialized with SUPERVITY_TOKEN")
 
     async def execute_workflow(
         self,
@@ -112,5 +122,5 @@ class SupervityClient:
             raise
 
 
-# Global client instance
-supervity_client = SupervityClient()
+# Global service instance
+supervity_service = SupervityService()

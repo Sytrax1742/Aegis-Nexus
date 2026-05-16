@@ -193,22 +193,27 @@ function HeroSection({ userName }: { userName?: string }) {
   )
 }
 
-// Ingestion Engine Component - Zone 1 Trigger Area
+// Orchestration Engine Component - Deal Processing
 function IngestionEngine({
   result,
   onResultChange,
+  onExecutionComplete,
 }: {
   result: { status: string; message: string; metadata?: unknown } | null
   onResultChange: (result: { status: string; message: string; metadata?: unknown } | null) => void
+  onExecutionComplete: () => void
 }) {
-  const [transcript, setTranscript] = useState('')
+  const [prospectName, setProspectName] = useState('')
+  const [companyName, setCompanyName] = useState('')
+  const [dealSize, setDealSize] = useState('')
+  const [requestedDiscount, setRequestedDiscount] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleExecute = async () => {
-    if (!transcript.trim()) {
+    if (!prospectName.trim() || !companyName.trim() || !dealSize || !requestedDiscount) {
       onResultChange({
         status: 'error',
-        message: '⚠️ Please enter a transcript to process',
+        message: '⚠️ Please fill in all fields',
       })
       return
     }
@@ -217,25 +222,47 @@ function IngestionEngine({
     onResultChange(null)
 
     try {
-      const response = await apiClient('/api/v1/nexus/ingest', {
+      const response = await apiClient('/api/v1/nexus/orchestrate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({
+          prospect_name: prospectName,
+          company_name: companyName,
+          deal_size: parseFloat(dealSize),
+          requested_discount: parseFloat(requestedDiscount),
+        }),
       })
 
       onResultChange(response as { status: string; message: string; metadata?: unknown })
 
-      // Clear transcript on success
+      // Clear fields on success
       if (response.status === 'success') {
-        setTranscript('')
+        setProspectName('')
+        setCompanyName('')
+        setDealSize('')
+        setRequestedDiscount('')
       }
-    } catch (error) {
-      onResultChange({
-        status: 'error',
-        message: `Error: ${error instanceof Error ? error.message : 'Failed to process transcript'}`,
-      })
+
+      // Trigger logs refresh
+      onExecutionComplete()
+    } catch (error: any) {
+      // Handle 403 policy violation
+      if (error.status === 403) {
+        onResultChange({
+          status: 'halted',
+          message: '⚠️ POLICY VIOLATION CAUGHT: Deal exceeds risk parameters. Routed to Supervity Workbench.',
+        })
+      } else {
+        onResultChange({
+          status: 'error',
+          message: `Error: ${error instanceof Error ? error.message : 'Failed to process deal'}`,
+        })
+      }
+
+      // Still trigger logs refresh
+      onExecutionComplete()
     } finally {
       setIsLoading(false)
     }
@@ -243,7 +270,7 @@ function IngestionEngine({
 
   const getAlertStyles = (status: string) => {
     switch (status) {
-      case 'exception':
+      case 'halted':
         return 'border-red-500 bg-red-50 text-red-900'
       case 'success':
         return 'border-emerald-500 bg-emerald-50 text-emerald-900'
@@ -261,7 +288,7 @@ function IngestionEngine({
         <CardHeader className='relative z-10'>
           <CardTitle className='flex items-center gap-2'>
             <Icons.zap className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
-            Ingest Sales Call Transcript
+            Orchestrate Deal Processing
           </CardTitle>
         </CardHeader>
         <CardContent className='relative z-10 space-y-4'>
@@ -289,22 +316,73 @@ function IngestionEngine({
             )}
           </AnimatePresence>
 
-          {/* Textarea */}
-          <div className='space-y-2'>
-            <label className='text-sm font-medium text-foreground'>Transcript</label>
-            <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              disabled={isLoading}
-              placeholder='Paste your sales call transcript here...'
-              className='min-h-32 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
-            />
+          {/* Input Fields Grid */}
+          <div className='grid grid-cols-2 gap-3'>
+            {/* Prospect Name */}
+            <div className='space-y-2'>
+              <label className='text-sm font-medium text-foreground'>Prospect Name</label>
+              <input
+                type='text'
+                value={prospectName}
+                onChange={(e) => setProspectName(e.target.value)}
+                disabled={isLoading}
+                placeholder='John Smith'
+                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+              />
+            </div>
+
+            {/* Company Name */}
+            <div className='space-y-2'>
+              <label className='text-sm font-medium text-foreground'>Company Name</label>
+              <input
+                type='text'
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                disabled={isLoading}
+                placeholder='TechCorp Inc'
+                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+              />
+            </div>
+
+            {/* Deal Size */}
+            <div className='space-y-2'>
+              <label className='text-sm font-medium text-foreground'>Deal Size ($)</label>
+              <input
+                type='number'
+                value={dealSize}
+                onChange={(e) => setDealSize(e.target.value)}
+                disabled={isLoading}
+                placeholder='250000'
+                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+              />
+            </div>
+
+            {/* Requested Discount */}
+            <div className='space-y-2'>
+              <label className='text-sm font-medium text-foreground'>Requested Discount (%)</label>
+              <input
+                type='number'
+                value={requestedDiscount}
+                onChange={(e) => setRequestedDiscount(e.target.value)}
+                disabled={isLoading}
+                placeholder='15'
+                min='0'
+                max='100'
+                className='w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-cornflower'
+              />
+            </div>
           </div>
 
           {/* Execute Button */}
           <Button
             onClick={handleExecute}
-            disabled={isLoading || !transcript.trim()}
+            disabled={
+              isLoading ||
+              !prospectName.trim() ||
+              !companyName.trim() ||
+              !dealSize ||
+              !requestedDiscount
+            }
             variant='gradient'
             className='w-full'
           >
@@ -324,6 +402,111 @@ function IngestionEngine({
               </>
             )}
           </Button>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+// Execution Logs Table Component
+interface AuditLog {
+  id: number
+  timestamp: string
+  action: string
+  actor_email?: string
+  description: string
+  success: boolean
+  severity: string
+  resource_type?: string
+  resource_id?: string
+}
+
+function ExecutionLogsTable({ refreshTrigger }: { refreshTrigger: number }) {
+  const [logs, setLogs] = useState<AuditLog[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        setIsLoading(true)
+        const response = await apiClient<AuditLog[]>('/api/v1/nexus/logs', {
+          method: 'GET',
+        })
+        setLogs(response)
+      } catch (error) {
+        console.error('Failed to fetch logs:', error)
+        setLogs([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchLogs()
+  }, [refreshTrigger])
+
+  const getStatusColor = (success: boolean) => {
+    return success ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'
+  }
+
+  const getStatusBadge = (success: boolean) => {
+    return success ? (
+      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800'>
+        ✓ Success
+      </span>
+    ) : (
+      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+        ✗ Failed
+      </span>
+    )
+  }
+
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className='relative overflow-hidden'>
+        <CardWatermark opacity={3} scale={0.9} />
+        <CardHeader className='relative z-10'>
+          <CardTitle className='flex items-center gap-2'>
+            <Icons.list className='h-5 w-5 text-brand-cornflower' strokeWidth={1.5} />
+            Execution Logs
+          </CardTitle>
+          <p className='text-sm text-muted-foreground mt-1'>Last 10 operations</p>
+        </CardHeader>
+        <CardContent className='relative z-10'>
+          {isLoading ? (
+            <div className='flex items-center justify-center py-6'>
+              <motion.div
+                className='h-4 w-4 rounded-full border-2 border-brand-cornflower border-t-transparent'
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
+              <p className='ml-2 text-sm text-muted-foreground'>Loading logs...</p>
+            </div>
+          ) : logs.length === 0 ? (
+            <p className='text-center text-sm text-muted-foreground py-6'>No logs yet</p>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className='w-full text-sm'>
+                <thead>
+                  <tr className='border-b border-slate-200'>
+                    <th className='text-left px-4 py-2 font-medium text-slate-600'>Timestamp</th>
+                    <th className='text-left px-4 py-2 font-medium text-slate-600'>Action</th>
+                    <th className='text-left px-4 py-2 font-medium text-slate-600'>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr key={log.id} className='border-b border-slate-100 hover:bg-slate-50'>
+                      <td className='px-4 py-3 text-slate-600'>
+                        {new Date(log.timestamp).toLocaleString()}
+                      </td>
+                      <td className='px-4 py-3 text-slate-700'>{log.action}</td>
+                      <td className='px-4 py-3'>{getStatusBadge(log.success)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
@@ -746,11 +929,16 @@ function ActiveGuardrails() {
 // Main Dashboard — Command Center with integrated agent mesh
 export default function CommandCenterDashboard() {
   const [result, setResult] = useState<{ status: string; message: string; metadata?: unknown } | null>(null)
+  const [logsRefreshTrigger, setLogsRefreshTrigger] = useState(0)
+
+  const handleExecutionComplete = () => {
+    setLogsRefreshTrigger((prev) => prev + 1)
+  }
 
   // Derive pipeline status from ingestion result
   const getPipelineStatus = (backendStatus?: string): 'idle' | 'processing' | 'success' | 'halted' => {
     if (!backendStatus) return 'idle'
-    if (backendStatus === 'workbench_halt') return 'halted'
+    if (backendStatus === 'halted') return 'halted'
     if (backendStatus === 'success') return 'success'
     if (backendStatus === 'pending') return 'processing'
     return 'idle'
@@ -809,19 +997,23 @@ export default function CommandCenterDashboard() {
         initial='hidden'
         animate='visible'
       >
-        {/* Left Column (8 cols): Pipeline Tracker → Ingestion Engine → Dashboard Charts → Active Guardrails */}
+        {/* Left Column (8 cols): Pipeline Tracker → Orchestration Engine → Execution Logs → Dashboard Charts */}
         <div className='lg:col-span-8 space-y-6'>
           {/* Pipeline Tracker */}
           <PipelineTracker status={pipelineStatus} />
 
-          {/* Ingestion Engine */}
-          <IngestionEngine result={result} onResultChange={setResult} />
+          {/* Orchestration Engine */}
+          <IngestionEngine
+            result={result}
+            onResultChange={setResult}
+            onExecutionComplete={handleExecutionComplete}
+          />
+
+          {/* Execution Logs Table */}
+          <ExecutionLogsTable refreshTrigger={logsRefreshTrigger} />
 
           {/* Dashboard Charts */}
           <DashboardCharts />
-
-          {/* Active Guardrails */}
-          <ActiveGuardrails />
         </div>
 
         {/* Right Column (4 cols): Active Guardrails + Exception Inbox */}
