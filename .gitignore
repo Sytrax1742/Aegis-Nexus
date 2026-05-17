@@ -1,5 +1,7 @@
-# Documentation
+# Documentation & Org Docs
 MISSION.md
+docs/
+org docs/
 
 # Next.js / React
 node_modules/
@@ -24,9 +26,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -92,17 +92,9 @@ data/
 *.db
 *.sqlite
 *.sqlite3
-.DS_Store
 
 # Build outputs
-dist/
-build/
-.turbo/
 *.tsbuildinfo
-
-# Package manager lockfiles (optional - uncomment if desired)
-# package-lock.json
-# yarn.lock
 
 # Test reports
 test-results/
@@ -114,3 +106,4 @@ coverage-reports/
 *.log
 node_modules/.vite
 .netlify
+

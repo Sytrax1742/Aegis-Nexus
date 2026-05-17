@@ -172,61 +172,238 @@ function InterventionModal({
   )
 }
 
-function AgentMesh({ status }: { status?: string | null }) {
-  const steps = ["Ingestion", "Extraction", "LeadIntel", "CRM Sync", "Guardrails", "Finalize", "Reporting"]
+function AgentMesh({ 
+  status, 
+  engineMode, 
+  meshSteps 
+}: { 
+  status?: string | null, 
+  engineMode: 'interactive' | 'backend', 
+  meshSteps: Record<string, { status: 'idle' | 'running' | 'success' | 'violated' | 'failed' | 'skipped'; duration?: number; input?: string; output?: string }>
+}) {
+  const [expandedNode, setExpandedNode] = useState<string | null>(null)
   
-  let activeIndex = -1
-  let isWaiting = false
-  
-  if (status === 'WAITING_FOR_INPUT') {
-    activeIndex = 4 // Guardrails
-    isWaiting = true
-  } else if (status === 'PROCESSING') {
-    activeIndex = 2
-  } else if (status === 'COMPLETE' || status === 'success') {
-    activeIndex = 7
+  if (engineMode === 'backend') {
+    // Render the original linear progress steps bar
+    const steps = ["Ingestion", "Extraction", "LeadIntel", "CRM Sync", "Guardrails", "Finalize", "Reporting"]
+    let activeIndex = -1
+    let isWaiting = false
+    
+    if (status === 'WAITING_FOR_INPUT') {
+      activeIndex = 4 // Guardrails
+      isWaiting = true
+    } else if (status === 'PROCESSING') {
+      activeIndex = 2
+    } else if (status === 'COMPLETE' || status === 'success') {
+      activeIndex = 7
+    }
+
+    return (
+      <div className='my-6 w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'>
+        <div className='flex items-center justify-between mb-4'>
+          <h3 className='text-xs font-bold uppercase tracking-widest text-slate-500'>AgentMesh Orchestrator Pipeline</h3>
+          <span className='inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200 shadow-sm'>
+            ⚙️ Backend Mode
+          </span>
+        </div>
+        <div className='relative flex items-center justify-between mt-6'>
+          {/* Background connector line */}
+          <div className='absolute left-0 top-4 -z-10 h-[2px] w-full -translate-y-1/2 bg-slate-100' />
+          
+          {steps.map((step, idx) => {
+            const isActive = idx === activeIndex
+            const isPast = idx < activeIndex
+            
+            let circleClasses = 'bg-white border-2 border-slate-200 text-slate-400'
+            let textClasses = 'text-slate-400'
+            
+            if (isWaiting && isActive) {
+              circleClasses = 'bg-amber-500 border-amber-500 text-white animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.5)]'
+              textClasses = 'text-amber-600 font-bold'
+            } else if (isPast) {
+              circleClasses = 'bg-emerald-500 border-emerald-500 text-white'
+              textClasses = 'text-emerald-600 font-medium'
+            } else if (isActive) {
+              circleClasses = 'bg-blue-500 border-blue-500 text-white animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]'
+              textClasses = 'text-blue-600 font-bold'
+            }
+
+            return (
+              <div key={step} className='flex flex-col items-center gap-3 bg-white px-2'>
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-500 ${circleClasses}`}>
+                  {isPast ? '✓' : (idx + 1)}
+                </div>
+                <span className={`text-[10px] uppercase tracking-wider ${textClasses}`}>
+                  {step}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
+  // --- RENDER HIGH-FIDELITY INTERACTIVE MESH GRAPH ---
+  const nodes = [
+    { key: 'ingestion', label: 'RAG Ingestion Ops', desc: 'SQLite active guidelines lookup', icon: 'shield' },
+    { key: 'lead_intel', label: 'LeadIntel Agent', desc: 'Claude 3 Opus entity extraction', icon: 'sparkles' },
+    { key: 'policy_guard', label: 'PolicyGuard Agent', desc: 'Compliance & margin auditing', icon: 'activity' },
+    { key: 'crm_sync', label: 'CRM Sync Ops', desc: 'Zoho Leads & Deals registration', icon: 'users' },
+    { key: 'doc_ops', label: 'OneDrive Doc Ops', desc: 'SOP enterprise proposal creation', icon: 'fileText' },
+    { key: 'comms_ops', label: 'Slack Comms Ops', desc: 'Real-time revenue alerts delivery', icon: 'network' }
+  ]
+
   return (
-    <div className='my-6 w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'>
-      <h3 className='mb-6 text-xs font-bold uppercase tracking-widest text-slate-500'>AgentMesh Orchestrator Pipeline</h3>
-      <div className='relative flex items-center justify-between'>
-        {/* Background connector line */}
-        <div className='absolute left-0 top-4 -z-10 h-[2px] w-full -translate-y-1/2 bg-slate-100' />
-        
-        {steps.map((step, idx) => {
-          const isActive = idx === activeIndex
-          const isPast = idx < activeIndex
+    <div className='my-6 w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 relative overflow-hidden'>
+      {/* Background accents */}
+      <div className='absolute right-0 top-0 -z-10 h-32 w-32 rounded-full bg-blue-50/50 blur-3xl' />
+      
+      <div className='flex flex-wrap items-center justify-between gap-4 mb-6'>
+        <div>
+          <h3 className='text-sm font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2'>
+            <span className='h-2.5 w-2.5 rounded-full bg-indigo-500 animate-ping' />
+            Supervity Interactive AgentMesh
+          </h3>
+          <p className='text-xs text-slate-500 mt-1'>
+            Observing each live model orchestration directly from the frontend interface.
+          </p>
+        </div>
+        <span className='inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700 border border-indigo-200 shadow-sm'>
+          🚀 Frontend Orchestrator Active
+        </span>
+      </div>
+
+      {/* Grid of Interactive Nodes */}
+      <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3 relative'>
+        {nodes.map((node) => {
+          const stepState = meshSteps[node.key] || { status: 'idle' }
+          const status = stepState.status
           
-          let circleClasses = 'bg-white border-2 border-slate-200 text-slate-400'
-          let textClasses = 'text-slate-400'
+          let cardBorder = 'border-slate-100'
+          let cardBg = 'bg-slate-50/30'
+          let pulseDot = 'bg-slate-300'
+          let statusText = 'Idle'
+          let statusColor = 'text-slate-400'
           
-          if (isWaiting && isActive) {
-            circleClasses = 'bg-amber-500 border-amber-500 text-white animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.5)]'
-            textClasses = 'text-amber-600 font-bold'
-          } else if (isPast) {
-            circleClasses = 'bg-emerald-500 border-emerald-500 text-white'
-            textClasses = 'text-emerald-600 font-medium'
-          } else if (isActive) {
-            circleClasses = 'bg-blue-500 border-blue-500 text-white animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-            textClasses = 'text-blue-600 font-bold'
+          if (status === 'running') {
+            cardBorder = 'border-indigo-400 ring-2 ring-indigo-100'
+            cardBg = 'bg-indigo-50/20 shadow-lg'
+            pulseDot = 'bg-indigo-500 animate-ping'
+            statusText = 'Executing model...'
+            statusColor = 'text-indigo-600 font-bold'
+          } else if (status === 'success') {
+            cardBorder = 'border-emerald-200'
+            cardBg = 'bg-emerald-50/20'
+            pulseDot = 'bg-emerald-500'
+            statusText = stepState.duration ? `Success (${stepState.duration.toFixed(1)}s)` : 'Success'
+            statusColor = 'text-emerald-600 font-semibold'
+          } else if (status === 'violated') {
+            cardBorder = 'border-amber-400 ring-2 ring-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+            cardBg = 'bg-amber-50/20'
+            pulseDot = 'bg-amber-500 animate-pulse'
+            statusText = 'Exceptions Flagged'
+            statusColor = 'text-amber-600 font-bold animate-pulse'
+          } else if (status === 'failed') {
+            cardBorder = 'border-rose-300'
+            cardBg = 'bg-rose-50/20'
+            pulseDot = 'bg-rose-500'
+            statusText = 'Failed'
+            statusColor = 'text-rose-600 font-bold'
+          } else if (status === 'skipped') {
+            cardBorder = 'border-slate-200'
+            cardBg = 'bg-slate-100/40'
+            pulseDot = 'bg-slate-400'
+            statusText = 'Skipped'
+            statusColor = 'text-slate-500'
           }
 
+          // Get icon matching string
+          let IconComponent = Icons.sparkles
+          if (node.icon === 'shield') IconComponent = Icons.shield
+          else if (node.icon === 'activity') IconComponent = Icons.activity
+          else if (node.icon === 'users') IconComponent = Icons.users
+          else if (node.icon === 'fileText') IconComponent = Icons.fileText
+
           return (
-            <div key={step} className='flex flex-col items-center gap-3 bg-white px-2'>
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-500 ${circleClasses}`}>
-                {isPast ? '✓' : (idx + 1)}
+            <div 
+              key={node.key} 
+              className={`rounded-2xl border ${cardBorder} ${cardBg} p-5 transition-all duration-300 flex flex-col justify-between h-full hover:shadow-md`}
+            >
+              <div>
+                <div className='flex items-center justify-between mb-3'>
+                  <div className='flex items-center gap-2'>
+                    <div className={`p-2 rounded-xl ${status === 'running' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                      <IconComponent className='h-4 w-4' />
+                    </div>
+                    <span className='font-bold text-slate-800 text-sm'>{node.label}</span>
+                  </div>
+                  <div className='flex items-center gap-1.5'>
+                    <span className={`h-2 w-2 rounded-full ${pulseDot}`} />
+                    <span className={`text-[10px] uppercase tracking-wider font-semibold ${statusColor}`}>
+                      {statusText}
+                    </span>
+                  </div>
+                </div>
+                <p className='text-xs text-slate-500 leading-relaxed mb-4'>{node.desc}</p>
               </div>
-              <span className={`text-[10px] uppercase tracking-wider ${textClasses}`}>
-                {step}
-              </span>
+
+              {(stepState.input || stepState.output) && (
+                <div className='mt-auto pt-3 border-t border-slate-100 flex items-center justify-between'>
+                  <button
+                    type='button'
+                    onClick={() => setExpandedNode(expandedNode === node.key ? null : node.key)}
+                    className='text-[10px] font-bold text-indigo-600 hover:text-indigo-800 tracking-wider uppercase inline-flex items-center gap-1'
+                  >
+                    🔍 {expandedNode === node.key ? 'Hide Data Trace' : 'Inspect Data Trace'}
+                  </button>
+                  {status === 'success' && <span className='text-[10px] text-emerald-600 font-bold'>✓ Logged</span>}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
+
+      {/* Expandable JSON Trace Viewer */}
+      {expandedNode && meshSteps[expandedNode] && (
+        <div className='mt-6 rounded-2xl bg-slate-950 p-5 font-mono text-xs text-slate-300 shadow-2xl relative animate-in fade-in slide-in-from-bottom-2 duration-300'>
+          <div className='flex items-center justify-between mb-4 border-b border-slate-800 pb-3'>
+            <span className='text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5'>
+              💻 Live JSON Payload Trace: {nodes.find(n => n.key === expandedNode)?.label}
+            </span>
+            <button
+              type='button'
+              onClick={() => setExpandedNode(null)}
+              className='text-slate-500 hover:text-white font-bold text-sm'
+            >
+              ✕ Close
+            </button>
+          </div>
+          <div className='space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar'>
+            {meshSteps[expandedNode].input && (
+              <div>
+                <p className='text-indigo-400 font-bold mb-1.5 uppercase text-[9px] tracking-widest'>📡 Request Payload Sent (Inputs)</p>
+                <pre className='bg-slate-900/80 p-3 rounded-lg border border-slate-800 overflow-x-auto text-[11px] leading-relaxed text-slate-300 select-all whitespace-pre-wrap'>
+                  {meshSteps[expandedNode].input}
+                </pre>
+              </div>
+            )}
+            {meshSteps[expandedNode].output && (
+              <div>
+                <p className='text-emerald-400 font-bold mb-1.5 uppercase text-[9px] tracking-widest'>📥 Response Payload Received (Output)</p>
+                <pre className='bg-slate-900/80 p-3 rounded-lg border border-slate-800 overflow-x-auto text-[11px] leading-relaxed text-emerald-300 select-all whitespace-pre-wrap'>
+                  {meshSteps[expandedNode].output}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 const SAMPLE_SUCCESS_TRANSCRIPT = `SALES CALL TRANSCRIPT — TechFlow Solutions Deal
 Date: May 15, 2026 | Duration: 22 minutes
@@ -332,24 +509,320 @@ export default function CommandCenterPage() {
   const [nexusBusy, setNexusBusy] = useState(false)
   const [showIntervention, setShowIntervention] = useState(false)
 
-  
+  // Custom Orchestrator engine modes (Interactive Mesh vs Backend)
+  const [engineMode, setEngineMode] = useState<'interactive' | 'backend'>('interactive')
+  const [meshSteps, setMeshSteps] = useState<Record<string, {
+    status: 'idle' | 'running' | 'success' | 'violated' | 'failed' | 'skipped';
+    duration?: number;
+    input?: string;
+    output?: string;
+  }>>({
+    ingestion: { status: 'idle' },
+    lead_intel: { status: 'idle' },
+    policy_guard: { status: 'idle' },
+    crm_sync: { status: 'idle' },
+    doc_ops: { status: 'idle' },
+    comms_ops: { status: 'idle' }
+  })
+
   useEffect(() => {
     if (nexusResult?.status === 'WAITING_FOR_INPUT') {
       setShowIntervention(true)
     }
   }, [nexusResult])
 
+  const fireInteractiveExecutionLayer = async (runId: string, intelData: any, policyData: any) => {
+    // 1. Mark all three execution layer nodes as running
+    setMeshSteps(prev => ({
+      ...prev,
+      crm_sync: { status: 'running', input: `runId: ${runId}\nlead_intel: ${JSON.stringify(intelData, null, 2).substring(0, 150)}...` },
+      doc_ops: { status: 'running', input: `runId: ${runId}\nGenerating proposal...` },
+      comms_ops: { status: 'running', input: `runId: ${runId}\nDispatching Slack alerts...` }
+    }))
+
+    const startTimeExec = Date.now()
+
+    // CRM Sync Promise
+    const crmForm = new FormData()
+    crmForm.append('workflowId', 'CRM_OPS')
+    crmForm.append('inputs[runId]', runId)
+    crmForm.append('inputs[transcript]', nexusTranscript)
+    crmForm.append('inputs[lead_intel]', JSON.stringify(intelData))
+    const crmPromise = apiClient.post<Record<string, any>>('/api/v1/nexus/workflows/execute', crmForm)
+      .then(res => {
+        const out = res.data || {}
+        setMeshSteps(prev => ({
+          ...prev,
+          crm_sync: {
+            status: 'success',
+            duration: (Date.now() - startTimeExec) / 1000,
+            input: `runId: ${runId}\nlead_intel: ${JSON.stringify(intelData, null, 2).substring(0, 150)}...`,
+            output: JSON.stringify(out, null, 2)
+          }
+        }))
+        return out
+      })
+      .catch(err => {
+        setMeshSteps(prev => ({
+          ...prev,
+          crm_sync: { status: 'failed', output: err.message }
+        }))
+        return null
+      })
+
+    // Doc Ops Promise
+    const docForm = new FormData()
+    docForm.append('workflowId', 'DOC_OPS')
+    docForm.append('inputs[runId]', runId)
+    docForm.append('inputs[transcript]', nexusTranscript)
+    const docPromise = apiClient.post<Record<string, any>>('/api/v1/nexus/workflows/execute', docForm)
+      .then(res => {
+        const out = res.data || {}
+        setMeshSteps(prev => ({
+          ...prev,
+          doc_ops: {
+            status: 'success',
+            duration: (Date.now() - startTimeExec) / 1000,
+            input: `runId: ${runId}`,
+            output: JSON.stringify(out, null, 2)
+          }
+        }))
+        return out
+      })
+      .catch(err => {
+        setMeshSteps(prev => ({
+          ...prev,
+          doc_ops: { status: 'failed', output: err.message }
+        }))
+        return null
+      })
+
+    // Comms Ops Promise
+    const commsForm = new FormData()
+    commsForm.append('workflowId', 'COMMS_OPS')
+    commsForm.append('inputs[runId]', runId)
+    commsForm.append('inputs[transcript]', nexusTranscript)
+    const commsPromise = apiClient.post<Record<string, any>>('/api/v1/nexus/workflows/execute', commsForm)
+      .then(res => {
+        const out = res.data || {}
+        setMeshSteps(prev => ({
+          ...prev,
+          comms_ops: {
+            status: 'success',
+            duration: (Date.now() - startTimeExec) / 1000,
+            input: `runId: ${runId}`,
+            output: JSON.stringify(out, null, 2)
+          }
+        }))
+        return out
+      })
+      .catch(err => {
+        setMeshSteps(prev => ({
+          ...prev,
+          comms_ops: { status: 'failed', output: err.message }
+        }))
+        return null
+      })
+
+    // Concurrently execute all three nodes in parallel!
+    const [crmRes, docRes, commsRes] = await Promise.all([crmPromise, docPromise, commsPromise])
+
+    const finalResult = {
+      status: 'success',
+      runId,
+      message: 'Interactive mesh pipeline execution completed successfully.',
+      lead_intel: intelData,
+      policy_result: policyData,
+      crm_ops: crmRes,
+      doc_ops: docRes,
+      comms_ops: commsRes
+    }
+
+    setNexusResult(finalResult)
+    await loadDashboardData()
+  }
+
+  const runInteractiveMeshOrchestrator = async () => {
+    setNexusBusy(true)
+    setNexusResult(null)
+    loadDashboardData()
+
+    // Reset steps to initial running/idle state
+    setMeshSteps({
+      ingestion: { status: 'idle' },
+      lead_intel: { status: 'idle' },
+      policy_guard: { status: 'idle' },
+      crm_sync: { status: 'idle' },
+      doc_ops: { status: 'idle' },
+      comms_ops: { status: 'idle' }
+    })
+
+    const runId = `run-${Math.floor(Date.now() / 1000)}`
+    let activePolicyText = ""
+
+    try {
+      // Step 1: Ingestion Config Lookup
+      setMeshSteps(prev => ({
+        ...prev,
+        ingestion: { status: 'running', input: 'Retrieving corporate policy RAG context from SQLite database...' }
+      }))
+      const startTimeIng = Date.now()
+      let ragRes = null
+      try {
+        ragRes = await apiClient.get<Record<string, any>>('/api/v1/nexus/rag-context')
+        if (ragRes && ragRes.status === 'success' && ragRes.policy_config) {
+          activePolicyText = JSON.stringify(ragRes.policy_config)
+          setMeshSteps(prev => ({
+            ...prev,
+            ingestion: {
+              status: 'success',
+              duration: (Date.now() - startTimeIng) / 1000,
+              input: 'GET /api/v1/nexus/rag-context',
+              output: `Loaded SQLite Policies successfully:\n${JSON.stringify(ragRes.policy_config, null, 2)}`
+            }
+          }))
+        } else {
+          setMeshSteps(prev => ({
+            ...prev,
+            ingestion: {
+              status: 'skipped',
+              duration: (Date.now() - startTimeIng) / 1000,
+              input: 'GET /api/v1/nexus/rag-context',
+              output: 'No active ingested policies found in SQLite. Proceeding with standard margin guardrails.'
+            }
+          }))
+        }
+      } catch (err) {
+        setMeshSteps(prev => ({
+          ...prev,
+          ingestion: {
+            status: 'skipped',
+            duration: (Date.now() - startTimeIng) / 1000,
+            input: 'GET /api/v1/nexus/rag-context',
+            output: 'Failed to access local SQLite RAG table. Proceeding with default configurations.'
+          }
+        }))
+      }
+
+      // Step 2: Lead Intel Agent (Claude 3 Opus)
+      setMeshSteps(prev => ({
+        ...prev,
+        lead_intel: { status: 'running', input: `POST /api/v1/nexus/workflows/execute\nworkflowId: LEAD_INTEL\nsales_transcript: "${nexusTranscript.substring(0, 100)}..."` }
+      }))
+      const startTimeIntel = Date.now()
+      const intelForm = new FormData()
+      intelForm.append('workflowId', 'LEAD_INTEL')
+      intelForm.append('inputs[sales_transcript]', nexusTranscript)
+      if (activePolicyText) {
+        intelForm.append('inputs[knowledge_ingestion_output]', activePolicyText)
+      }
+
+      const intelRes = await apiClient.post<Record<string, any>>('/api/v1/nexus/workflows/execute', intelForm)
+      const intelData = intelRes?.data || {}
+      
+      setMeshSteps(prev => ({
+        ...prev,
+        lead_intel: {
+          status: 'success',
+          duration: (Date.now() - startTimeIntel) / 1000,
+          input: `POST /api/v1/nexus/workflows/execute\nworkflowId: LEAD_INTEL\nsales_transcript: "${nexusTranscript.substring(0, 150)}..."`,
+          output: JSON.stringify(intelData, null, 2)
+        }
+      }))
+
+      // Step 3: Policy Guard Agent
+      setMeshSteps(prev => ({
+        ...prev,
+        policy_guard: { status: 'running', input: `POST /api/v1/nexus/workflows/execute\nworkflowId: POLICY_GUARD\nextracted_data: ${JSON.stringify(intelData).substring(0, 100)}...` }
+      }))
+      const startTimePolicy = Date.now()
+      const policyForm = new FormData()
+      policyForm.append('workflowId', 'POLICY_GUARD')
+      policyForm.append('inputs[sales_transcript]', nexusTranscript)
+      policyForm.append('inputs[extracted_data]', JSON.stringify(intelData))
+      if (activePolicyText) {
+        policyForm.append('inputs[knowledge_ingestion_output]', activePolicyText)
+      }
+
+      const policyRes = await apiClient.post<Record<string, any>>('/api/v1/nexus/workflows/execute', policyForm)
+      const policyData = policyRes?.data || {}
+      const compliant = policyData.compliant !== false
+
+      if (!compliant) {
+        setMeshSteps(prev => ({
+          ...prev,
+          policy_guard: {
+            status: 'violated',
+            duration: (Date.now() - startTimePolicy) / 1000,
+            input: `POST /api/v1/nexus/workflows/execute\nworkflowId: POLICY_GUARD\ninputs[extracted_data]: ${JSON.stringify(intelData).substring(0, 150)}...`,
+            output: JSON.stringify(policyData, null, 2)
+          }
+        }))
+
+        // Mock state for the exception block
+        const mockWaitingResult = {
+          status: 'WAITING_FOR_INPUT',
+          runId,
+          message: policyData.recommendation || 'Corporate Sales compliance violation triggered.',
+          lead_intel: intelData,
+          policy_result: policyData,
+          violations: policyData.violations || []
+        }
+        setNexusResult(mockWaitingResult)
+        return
+      }
+
+      setMeshSteps(prev => ({
+        ...prev,
+        policy_guard: {
+          status: 'success',
+          duration: (Date.now() - startTimePolicy) / 1000,
+          input: `POST /api/v1/nexus/workflows/execute\nworkflowId: POLICY_GUARD\ninputs[extracted_data]: ${JSON.stringify(intelData).substring(0, 150)}...`,
+          output: JSON.stringify(policyData, null, 2)
+        }
+      }))
+
+      // Executing parallel actions
+      await fireInteractiveExecutionLayer(runId, intelData, policyData)
+
+    } catch (error) {
+      console.error('Interactive mesh execution failed:', error)
+      alert('Orchestration failed on one of the mesh nodes. Please check logs.')
+    } finally {
+      setNexusBusy(false)
+    }
+  }
+
   const handleResolveException = async (input: string) => {
     if (!nexusResult?.runId) return
     try {
       setNexusBusy(true)
+      
+      // Submit approval decision to the backend
       const res = await apiClient.post<Record<string, unknown>>('/api/v1/nexus/resolve-exception', {
         runId: nexusResult.runId,
         input_data: { human_input: input }
       })
-      setNexusResult(res)
-      setShowIntervention(false)
-      await loadDashboardData()
+      
+      if (engineMode === 'interactive') {
+        // Log override context inside PolicyGuard node
+        setMeshSteps(prev => ({
+          ...prev,
+          policy_guard: {
+            ...prev.policy_guard,
+            status: 'success',
+            output: `${prev.policy_guard.output}\n\n✓ VP COMPLIANCE OVERRIDE APPROVED BY SARAH JENKINS:\n"${input}"`
+          }
+        }))
+        setShowIntervention(false)
+        
+        // Execute parallel backend sync actions
+        await fireInteractiveExecutionLayer(nexusResult.runId, nexusResult.lead_intel, nexusResult.policy_result)
+      } else {
+        setNexusResult(res)
+        setShowIntervention(false)
+        await loadDashboardData()
+      }
     } catch (error) {
       console.error('Failed to resolve exception:', error)
       alert('Failed to resolve exception')
@@ -565,21 +1038,25 @@ export default function CommandCenterPage() {
       return
     }
 
-    setNexusBusy(true)
-    loadDashboardData()
-    try {
-      // Direct call to our robust AI orchestrator endpoint
-      const res = await apiClient.post<Record<string, unknown>>('/api/v1/nexus/orchestrate', {
-        transcript: nexusTranscript
-      })
-      setNexusResult(res)
-      await loadDashboardData()
-    } catch (error) {
-      console.error('Nexus error:', error)
-      const responseBody = error instanceof Error ? (error as any).response?.body : null
-      setNexusResult(responseBody || { error: error instanceof Error ? error.message : 'Nexus analysis failed' })
-    } finally {
-      setNexusBusy(false)
+    if (engineMode === 'interactive') {
+      await runInteractiveMeshOrchestrator()
+    } else {
+      setNexusBusy(true)
+      loadDashboardData()
+      try {
+        // Direct call to our robust AI orchestrator endpoint
+        const res = await apiClient.post<Record<string, unknown>>('/api/v1/nexus/orchestrate', {
+          transcript: nexusTranscript
+        })
+        setNexusResult(res)
+        await loadDashboardData()
+      } catch (error) {
+        console.error('Nexus error:', error)
+        const responseBody = error instanceof Error ? (error as any).response?.body : null
+        setNexusResult(responseBody || { error: error instanceof Error ? error.message : 'Nexus analysis failed' })
+      } finally {
+        setNexusBusy(false)
+      }
     }
   }
 
@@ -657,6 +1134,46 @@ export default function CommandCenterPage() {
               description='Direct sales transcript analysis with live RAG policy validation and automated Zoho deal updates.'
             >
               <div className='space-y-4'>
+                {/* Advanced Engine Coordinator Selector Toggle */}
+                <div className='flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-4'>
+                  <div>
+                    <h4 className='text-xs font-bold uppercase tracking-wider text-indigo-900 flex items-center gap-1.5'>
+                      🌐 Pipeline Execution Engine
+                    </h4>
+                    <p className='text-[11px] text-indigo-700 mt-0.5 leading-relaxed'>
+                      {engineMode === 'interactive' 
+                        ? 'Frontend Orchestrator Mode: Traces individual Claude & Guardrail steps with full visibility.' 
+                        : 'Backend Orchestrator Mode: Traces unified endpoint execution with server-side parsing.'}
+                    </p>
+                  </div>
+                  <div className='flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm'>
+                    <button
+                      type='button'
+                      onClick={() => setEngineMode('interactive')}
+                      className={cn(
+                        'px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200',
+                        engineMode === 'interactive' 
+                          ? 'bg-indigo-600 text-white shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      )}
+                    >
+                      Interactive Mesh
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => setEngineMode('backend')}
+                      className={cn(
+                        'px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200',
+                        engineMode === 'backend' 
+                          ? 'bg-slate-800 text-white shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      )}
+                    >
+                      Backend Direct
+                    </button>
+                  </div>
+                </div>
+
                 <div className='grid gap-4 md:grid-cols-2'>
                   <div className='flex flex-col gap-2'>
                     <div className='flex items-center justify-between'>
@@ -704,7 +1221,11 @@ export default function CommandCenterPage() {
                   </div>
                 </div>
 
-                <AgentMesh status={nexusBusy ? 'PROCESSING' : nexusResult?.status || (nexusResult ? 'COMPLETE' : null)} />
+                <AgentMesh 
+                  status={nexusBusy ? 'PROCESSING' : nexusResult?.status || (nexusResult ? 'COMPLETE' : null)} 
+                  engineMode={engineMode} 
+                  meshSteps={meshSteps} 
+                />
                 <div className='flex items-center gap-3'>
                   <button
                     onClick={runDedicatedNexus}

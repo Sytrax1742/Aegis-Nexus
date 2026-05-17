@@ -31,7 +31,10 @@ log = logging.getLogger(__name__)
 # FastRouter / OpenRouter config
 FASTROUTER_API_KEY = os.getenv("FASTROUTER_API_KEY")
 FASTROUTER_BASE_URL = os.getenv("FASTROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
-MODEL_NAME = "anthropic/claude-sonnet-4"
+MODEL_NAME = "anthropic/claude-3-opus"
+
+# Global run cache to pass extracted entities between orchestrator and CRM/Comms downsreams
+_pipeline_cache = {}
 
 
 async def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 4096) -> str:
@@ -106,7 +109,7 @@ def _extract_json_from_response(text: str) -> dict:
 
 async def run_lead_intel(transcript: str, policy_context: str = "") -> dict:
     """LeadIntel Ops Agent — AI-powered transcript analysis."""
-    system_prompt = """You are the Lead Intelligence Agent for Aegis-Nexus.
+    system_prompt = """You are the Lead Intelligence Agent for Aegis-Nexus, a premium revenue governance platform developed for Aegis Corp's Sales Department under the oversight of Sarah Jenkins, the VP of Sales. This pipeline is powered and automated by Supervity's high-fidelity AI AgentMesh cloud platform.
 
 Analyze the sales call transcript and produce actionable intelligence.
 
@@ -164,7 +167,7 @@ Return ONLY the JSON object. No explanations, no markdown fences."""
 
 async def run_policy_guard(transcript: str, extracted_data: dict, policy_context: str = "") -> dict:
     """PolicyGuard Agent — AI-powered compliance checking."""
-    system_prompt = """You are the PolicyGuard Agent for Aegis-Nexus.
+    system_prompt = """You are the PolicyGuard Agent for Aegis-Nexus, a premium revenue compliance agent for Aegis Corp's Sales Department, reporting directly to VP of Sales Sarah Jenkins. This guardrail checking phase runs on the Supervity AI AgentMesh automation mesh.
 
 Analyze a sales deal against corporate policies and flag ANY violations.
 
@@ -196,7 +199,7 @@ Return VALID JSON:
   "auto_actions": ["<action1>", "<action2>"]
 }
 
-Return ONLY the JSON object."""
+Return ONLY the JSON object. No explanations, no markdown fences."""
 
     user_prompt = f"""Sales Transcript:
 {transcript}
@@ -238,6 +241,13 @@ async def run_orchestrator(transcript: str, policy_context: str = "") -> dict:
     log.info(f"[LocalOrchestrator] Phase 2: PolicyGuard compliance check")
     policy_result = await run_policy_guard(transcript, lead_intel, policy_context)
 
+    # Store in memory pipeline cache for downstream execution agents (CRM, Comms, Doc)
+    _pipeline_cache[run_id] = {
+        "lead_intel": lead_intel,
+        "policy_result": policy_result,
+        "timestamp": time.time()
+    }
+
     # Phase 3: Decision — WAITING_FOR_INPUT or proceed
     is_compliant = policy_result.get("compliant", True)
     violations = policy_result.get("violations", [])
@@ -267,25 +277,96 @@ async def run_orchestrator(transcript: str, policy_context: str = "") -> dict:
 
 
 async def run_crm_ops(run_id: str, transcript: str, lead_intel: dict = None) -> dict:
-    """CRM Ops Agent — Generate Zoho CRM payloads."""
+    """CRM Ops Agent — Sync Deal and Lead data to Zoho CRM if OAuth is connected."""
+    from .zoho import zoho_service
+    from ..core.database import SessionLocal
+
+    # 1. Retrieve parsed entities from the pipeline cache, or fall back to extracting them now
+    cached = _pipeline_cache.get(run_id, {})
+    if not lead_intel:
+        lead_intel = cached.get("lead_intel") or await run_lead_intel(transcript)
+
     prospect = (lead_intel or {}).get("prospect", {})
+    company = prospect.get("company", "Unknown Company")
+    contact_name = prospect.get("contact_name", "Unknown Contact")
+    contact_title = prospect.get("contact_title", "Prospect")
+    budget = prospect.get("budget", "Unknown")
+
+    crm_lead_id = f"zoho-lead-{int(time.time()) % 10000}"
+    crm_deal_id = f"zoho-deal-{int(time.time()) % 10000}"
+    crm_status = "simulated"
+
+    # 2. Query SQLite DB to check if Zoho OAuth is actively connected and authenticated
+    with SessionLocal() as db:
+        try:
+            status_res = await zoho_service.get_connection_status(db)
+            if status_res.get("connected"):
+                log.info(f"Zoho CRM OAuth is connected! Pushing Lead for '{company}'...")
+                
+                # Split contact name safely into First / Last names
+                name_parts = contact_name.strip().split()
+                last_name = name_parts[-1] if len(name_parts) > 1 else contact_name
+                first_name = " ".join(name_parts[:-1]) if len(name_parts) > 1 else ""
+
+                lead_payload = {
+                    "Last_Name": last_name,
+                    "First_Name": first_name,
+                    "Company": company,
+                    "Title": contact_title,
+                    "Lead_Source": "Aegis-Nexus Automated Pipeline",
+                    "Description": f"Lead processed via Aegis-Nexus. Run ID: {run_id}. Extracted budget: {budget}."
+                }
+
+                # Trigger the Zoho REST API push!
+                lead_response = await zoho_service.create_lead(db, lead_payload)
+                if lead_response and "data" in lead_response and len(lead_response["data"]) > 0:
+                    crm_lead_id = lead_response["data"][0].get("details", {}).get("id", crm_lead_id)
+                    crm_status = "live"
+                    log.info(f"Successfully synchronized Zoho Lead ID: {crm_lead_id}")
+
+                    # Attempt to create a matching Deal linked to this lead
+                    clean_budget = 10000.0
+                    try:
+                        clean_budget = float(budget.replace("$", "").replace(",", "").strip())
+                    except ValueError:
+                        pass
+
+                    deal_payload = {
+                        "Deal_Name": f"{company} — Aegis Enterprise Cloud",
+                        "Stage": "Qualification",
+                        "Pipeline": "Standard",
+                        "Amount": clean_budget,
+                        "Closing_Date": time.strftime("%Y-%m-%d", time.localtime(time.time() + 90 * 86400)), # 90 days closing
+                        "Description": f"Generated via Aegis-Nexus platform for pipeline run {run_id}."
+                    }
+                    
+                    deal_response = await zoho_service.create_deal(db, deal_payload)
+                    if deal_response and "data" in deal_response and len(deal_response["data"]) > 0:
+                        crm_deal_id = deal_response["data"][0].get("details", {}).get("id", crm_deal_id)
+                        log.info(f"Successfully synchronized Zoho Deal ID: {crm_deal_id}")
+            else:
+                log.info(f"Zoho CRM OAuth is NOT connected ({status_res.get('reason')}). Falling back to high-fidelity simulated CRM IDs.")
+        except Exception as crm_err:
+            log.error(f"Error during real-time Zoho CRM sync: {crm_err}. Falling back to simulation.")
+
     return {
         "status": "success",
         "crm_action": "CREATE_LEAD",
-        "crm_deal_id": f"zoho-deal-{int(time.time()) % 10000}",
-        "crm_lead_id": f"zoho-lead-{int(time.time()) % 10000}",
+        "crm_deal_id": crm_deal_id,
+        "crm_lead_id": crm_lead_id,
+        "sync_status": crm_status,
         "lead_data": {
-            "company": prospect.get("company", "Unknown"),
-            "contact_name": prospect.get("contact_name", "Unknown"),
-            "contact_title": prospect.get("contact_title", ""),
-            "budget": prospect.get("budget", ""),
+            "company": company,
+            "contact_name": contact_name,
+            "contact_title": contact_title,
+            "budget": budget,
             "source": "Aegis-Nexus AI Pipeline",
         },
     }
 
 
 async def run_doc_ops(run_id: str, transcript: str) -> dict:
-    """Doc Ops Agent — Generate proposal metadata."""
+    """Doc Ops Agent — Generate proposal metadata inside corporate repository."""
     return {
         "status": "success",
         "document_type": "proposal",
@@ -295,12 +376,115 @@ async def run_doc_ops(run_id: str, transcript: str) -> dict:
 
 
 async def run_comms_ops(run_id: str, transcript: str) -> dict:
-    """Comms Ops Agent — Generate notification payloads."""
+    """Comms Ops Agent — Send real-time Slack notification webhook triggers if set."""
+    slack_webhook = os.getenv("SLACK_WEBHOOK_URL", "")
+    sent_real = False
+
+    # 1. Retrieve parsed entities and policy results from cache or dynamic run
+    cached = _pipeline_cache.get(run_id, {})
+    lead_intel = cached.get("lead_intel")
+    policy_result = cached.get("policy_result")
+
+    if not lead_intel:
+        lead_intel = await run_lead_intel(transcript)
+    if not policy_result:
+        policy_result = await run_policy_guard(transcript, lead_intel)
+
+    prospect = (lead_intel or {}).get("prospect", {})
+    company = prospect.get("company", "Unknown Company")
+    contact = prospect.get("contact_name", "Unknown Contact")
+    budget = prospect.get("budget", "Unknown")
+    intent_score = lead_intel.get("intent_score", 75)
+
+    is_compliant = policy_result.get("compliant", True)
+    violations = policy_result.get("violations", [])
+    violations_summary = ""
+    if violations:
+        violations_summary = "\n".join([f"• *[{v.get('severity','').upper()}]* {v.get('details')}" for v in violations])
+
+    # 2. Trigger active notification if configured
+    if slack_webhook and "YOUR/WEBHOOK/URL" not in slack_webhook:
+        try:
+            status_emoji = "🟢 COMPLIANT" if is_compliant else "🔴 POLICY VIOLATION FLAGGED"
+            slack_payload = {
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "🛡️ Aegis-Nexus Revenue Intelligence Hub",
+                            "emoji": True
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Pipeline Run ID:* `{run_id}`\n*Governance Status:* {status_emoji}"
+                        }
+                    },
+                    {
+                        "type": "divider"
+                    },
+                    {
+                        "type": "section",
+                        "fields": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Prospect Company:*\n{company}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Contact Name:*\n{contact}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Est. Deal Value / Budget:*\n{budget}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*AI Intent Score:*\n🔮 {intent_score}/100"
+                            }
+                        ]
+                    }
+                ]
+            }
+
+            if violations_summary:
+                slack_payload["blocks"].append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Triggered Guardrail Exceptions:*\n{violations_summary}"
+                    }
+                })
+
+            slack_payload["blocks"].append({
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "⚡ Powered by *Supervity AI AgentMesh* & Aegis-Nexus Revenue Governance Engine."
+                    }
+                ]
+            })
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(slack_webhook, json=slack_payload)
+                if resp.status_code == 200:
+                    sent_real = True
+                    log.info("Successfully dispatched real-time notification to Slack webhook!")
+                else:
+                    log.error(f"Failed to post to Slack webhook: Status {resp.status_code} — {resp.text}")
+        except Exception as e:
+            log.error(f"Failed to dispatch Slack alert: {e}")
+
     return {
         "status": "success",
         "slack_sent": True,
+        "slack_dispatch": "live" if sent_real else "simulated",
         "channel": "#revenue-ops",
-        "message_preview": f"New deal processed via pipeline run {run_id}",
+        "message_preview": f"Deal processed for {company} via pipeline run {run_id}",
     }
 
 

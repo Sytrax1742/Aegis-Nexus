@@ -92,7 +92,7 @@ async def ingest_knowledge(
                     workflow_id=WORKFLOW_IDS["KNOWLEDGE_INGESTION"],
                     files=files
                 ),
-                timeout=5.0
+                timeout=120.0
             )
         except Exception as sync_err:
             log.warning(f"Knowledge Ingestion live run bypassed or timed out: {sync_err}. Relying on SQLite cached policy database.")
@@ -354,7 +354,7 @@ async def orchestrate_pipeline(
                     workflow_id=orchestrator_id,
                     inputs=orchestrator_inputs,
                 ),
-                timeout=3.0
+                timeout=120.0
             )
         except Exception as o_err:
             log.warning(f"Orchestrator live execution timed out or failed: {o_err}. Falling back to localized AI simulation.")
@@ -438,7 +438,7 @@ async def orchestrate_pipeline(
                             workflow_id=wf_id,
                             inputs=exec_inputs,
                         ),
-                        timeout=3.0
+                        timeout=120.0
                     )
                 except Exception as exec_err:
                     log.warning(f"Execution workflow {key} live run timed out or failed: {exec_err}. Falling back to simulation.")

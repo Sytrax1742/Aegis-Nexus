@@ -1,367 +1,206 @@
-# 🚀 AutoPilot Template
+# 🚀 Aegis Nexus — Autopilot Revenue Command Center
 
-Your AI Command Center starter kit for the AutoPilot Hackathon.
+Welcome to **Aegis Nexus**, the next-generation multi-agent revenue command center. Aegis Nexus automates the entire B2B sales lifecycle—from raw meeting transcript analysis and CRM registration to compliance auditing, custom proposal generation, and real-time revenue team notifications—while keeping **Humans-in-the-Loop** for margin governance and exception overrides.
 
-Build an intelligent, multi-agent command center that automates business processes with AI — while keeping humans in the loop for oversight and exception handling.
-
----
-
-## Prerequisites
-
-Before you begin, make sure you have these installed on your machine:
-
-| Tool | macOS | Windows | Why you need it |
-|------|-------|---------|-----------------|
-| **Docker Desktop** | [Download for Mac](https://www.docker.com/products/docker-desktop/) | [Download for Windows](https://www.docker.com/products/docker-desktop/) | Runs all services (backend, frontend, database) in containers |
-| **Git** | Pre-installed or `brew install git` | [Download](https://git-scm.com/download/win) or `winget install Git.Git` | Clone the repository |
-
-> **Windows users:** Make sure WSL 2 is enabled (Docker Desktop will prompt you). If you see a WSL error, run `wsl --install` in PowerShell as Administrator and restart.
+This repository is built using **FastAPI (Python)**, **Next.js 15 (React 19)**, **SQLite/PostgreSQL**, and is fully containerized with **Docker Compose**.
 
 ---
 
-## 🚀 Getting Started — Step by Step
+## 🎯 Double-Sided Operation Manual
+This guide is structured into two comprehensive sections to serve both our engineering team and our executive leadership:
 
-### Step 1: Clone the Repository
-
-**macOS (Terminal) / Windows (PowerShell / Git Bash):**
-```bash
-git clone <your-repo-url>
-cd AutoPilot-Template
-```
-
-### Step 2: Create Your Environment File
-
-**macOS / Linux:**
-```bash
-cp .env.example .env
-```
-
-**Windows (PowerShell):**
-```powershell
-Copy-Item .env.example .env
-```
-
-**Windows (Command Prompt):**
-```cmd
-copy .env.example .env
-```
-
-> The default `.env` works out of the box — `AUTH_BYPASS=true` means no external auth setup needed. The app starts with a "Dev User" session automatically.
-
-### Step 3: Start Docker Desktop
-
-1. Open **Docker Desktop** from your Applications (Mac) or Start Menu (Windows)
-2. Wait until the Docker icon in your system tray/menu bar shows **"Docker Desktop is running"**
-3. If this is your first time, Docker may take 1-2 minutes to initialize
-
-### Step 4: Start All Services
-
-**macOS / Linux (Terminal):**
-```bash
-make up
-```
-
-**Windows (PowerShell):**
-```powershell
-.\scripts\start.ps1
-```
-
-> This script clears WSL2 port conflicts, starts Docker, and verifies all services are reachable.
-> You can still use `docker compose up --build -d` directly, but the script handles a common Windows networking issue automatically.
-
-> First run takes 2-5 minutes to download images and build containers. Subsequent runs use cache and start in ~15 seconds.
-
-### Step 5: Verify Everything is Running
-
-**macOS / Linux:**
-```bash
-docker compose ps
-```
-
-**Windows (PowerShell):**
-```powershell
-docker compose ps
-```
-
-You should see 3 services with status `running` or `Up`:
-```
-NAME                              STATUS
-autopilot-template-postgres-1     running (healthy)
-autopilot-template-backend-1      running
-autopilot-template-frontend-1     running
-```
-
-### Step 6: Open Your Command Center
-
-| Service | URL | What it is |
-|---------|-----|------------|
-| 🖥️ **Dashboard** | [http://localhost:3001](http://localhost:3001) | Your Command Center UI |
-| ⚙️ **API Docs** | [http://localhost:8001/api/docs](http://localhost:8001/api/docs) | Backend Swagger documentation |
-| 🗄️ **Database** | `localhost:5432` | PostgreSQL (user: `user`, password: `password`) |
-
-**You should see the Command Center dashboard with:**
-- Stat cards showing AI activity metrics
-- An activity chart with weekly data
-- An AI Confidence indicator
-- The AI Manager button in the top header bar
+1. [🛠️ PART 1: THE ENGINEERING DEVELOPER MANUAL](#-part-1-the-engineering-developer-manual) (For Developers & Architects)
+2. [📈 PART 2: THE EXECUTIVE REVENUE PLAYBOOK](#-part-2-the-executive-revenue-playbook) (For Sales VPs & Operations Leaders)
 
 ---
 
-## 🛑 Stopping & Restarting
+# 🛠️ PART 1: THE ENGINEERING DEVELOPER MANUAL
 
-### Stop All Services
+## 🧬 Architectural Overview & Data Flow
+Aegis Nexus employs an **Interactive Client-Side Orchestrator (AgentMesh)** that coordinates six specialized Supervity agent workflows. Unlike standard black-box AI engines, Aegis Nexus breaks down execution into isolated steps, facilitating granular error boundary handling and real-time data tracing.
 
-**macOS / Linux:**
-```bash
-make down
-```
-
-**Windows (PowerShell):**
-```powershell
-docker compose down
-```
-
-### Restart (without rebuilding)
-
-**macOS / Linux:**
-```bash
-docker compose up -d
-```
-
-**Windows (PowerShell):**
-```powershell
-docker compose up -d
-```
-
-### Full Rebuild (after code changes)
-
-**macOS / Linux:**
-```bash
-make up
-```
-
-**Windows (PowerShell):**
-```powershell
-docker compose up --build -d
-```
-
-### Clean Reset (fresh start — removes all data)
-
-**macOS / Linux:**
-```bash
-make down
-docker volume rm autopilot-template_postgres_data autopilot-template_document_storage
-make up
-```
-
-**Windows (PowerShell):**
-```powershell
-docker compose down
-docker volume rm autopilot-template_postgres_data autopilot-template_document_storage
-docker compose up --build -d
+```mermaid
+graph TD
+    A[Raw Sales Transcript] --> B[GET /api/v1/nexus/rag-context]
+    B --> C[Step 1: RAG Ingestion Ops]
+    C --> D[Step 2: LeadIntel Agent]
+    D --> E[Step 3: PolicyGuard Compliance Agent]
+    E --> F{Compliance Status}
+    
+    F -- Compliant Deal --> G[Step 4-6 Parallel Execution Layer]
+    F -- Violation Flagged --> H[Halt & Show VP Override Console]
+    H -- VP Approves exception --> G
+    
+    G --> I[CRM Sync Ops]
+    G --> J[OneDrive Doc Ops]
+    G --> K[Slack Comms Ops]
 ```
 
 ---
 
-## 📋 Common Commands Reference
+## 🎛️ Downstream Agent Payload Definitions
+The backend proxy executes direct client requests via `POST /api/v1/nexus/workflows/execute` using standard `multipart/form-data` parameters:
 
-### macOS / Linux (using `make`)
+### 1. Ingestion / Policy Lookup (`ingestion`)
+* **Endpoint**: `GET /api/v1/nexus/rag-context`
+* **Purpose**: Retrieves cached discount caps, restricted competitors, and SLA commitments from SQLite.
+* **Output Example**:
+  ```json
+  {
+    "status": "success",
+    "policy_config": {
+      "max_allowable_discount": 35.0,
+      "restricted_competitors": ["Acrobatics Corp", "OmniGuard Inc"]
+    }
+  }
+  ```
 
-| Command | What it does |
-|---------|-------------|
-| `make up` | Build and start all services |
-| `make down` | Stop all services |
-| `make logs-be` | Stream backend logs (live) |
-| `make logs-fe` | Stream frontend logs (live) |
-| `make reset-db` | Reset database and re-seed sample data |
-| `make migrate-create MSG='add users table'` | Create a new database migration |
-| `make migrate-up` | Apply all pending migrations |
-| `make migrate-down` | Rollback the last migration |
-| `make migrate-history` | Show migration history |
-| `make lint` | Lint backend + frontend code |
-| `make test-be` | Run backend unit tests |
-| `make help` | Show all available commands |
+### 2. Lead Intel Agent (`LEAD_INTEL`)
+* **Supervity Workflow ID**: `019e3095-3378-7000-81f1-6f5dfee4b6ea`
+* **Form Inputs**: 
+  - `workflowId`: `"LEAD_INTEL"`
+  - `inputs[sales_transcript]`: Raw text.
+  - `inputs[knowledge_ingestion_output]`: Active ingested policies.
+* **Output Schema**:
+  ```json
+  {
+    "intent_score": 85,
+    "prospect": { "name": "Sarah Kim", "company": "TechFlow Solutions" },
+    "battlecard": { "pain_points": ["latency"], "strategy": "Focus on SLAs" }
+  }
+  ```
 
-### Windows (using `docker compose` directly)
+### 3. Policy Guard Compliance Agent (`POLICY_GUARD`)
+* **Supervity Workflow ID**: `019e306a-34a6-7000-ab83-01ed37ef91a4`
+* **Form Inputs**: 
+  - `workflowId`: `"POLICY_GUARD"`
+  - `inputs[sales_transcript]`: Raw text.
+  - `inputs[extracted_data]`: JSON stringified output from `LEAD_INTEL`.
+* **Output Schema**:
+  ```json
+  {
+    "compliant": false,
+    "violations": [{ "rule": "Discount exceeds 35% cap", "severity": "CRITICAL" }],
+    "recommendation": "Halt deal pending VP Approval."
+  }
+  ```
 
-| Command | What it does |
-|---------|-------------|
-| `docker compose up --build -d` | Build and start all services |
-| `docker compose down` | Stop all services |
-| `docker compose logs -f backend` | Stream backend logs (live) |
-| `docker compose logs -f frontend` | Stream frontend logs (live) |
-| `docker compose exec backend python scripts/reset_db.py` | Reset database |
-| `docker compose exec backend alembic revision --autogenerate -m "description"` | Create migration |
-| `docker compose exec backend alembic upgrade head` | Apply all pending migrations |
-| `docker compose exec backend alembic downgrade -1` | Rollback last migration |
-| `docker compose exec backend alembic history --verbose` | Show migration history |
-| `docker compose exec backend pytest` | Run backend tests |
+### 4. Zoho CRM Sync Ops (`CRM_OPS`)
+* **Supervity Workflow ID**: `019e307e-2f53-7000-a9c8-25ae89119cf9`
+* **Form Inputs**:
+  - `inputs[runId]`: Target pipeline execution ID.
+  - `inputs[lead_intel]`: Stringified JSON from `LEAD_INTEL`.
+* **Output Schema**: `{ "status": "success", "crm_deal_id": "DEAL-99831", "lead_status": "registered" }`
 
-> **Tip for Windows:** You can install `make` via [Chocolatey](https://chocolatey.org/) (`choco install make`) or [Scoop](https://scoop.sh/) (`scoop install make`) to use the shorter `make` commands.
+### 5. OneDrive Doc Ops (`DOC_OPS`)
+* **Supervity Workflow ID**: `019e3089-2ae9-7000-90c5-f6e1e1269002`
+* **Form Inputs**: `inputs[transcript]`: Raw text.
+* **Output Schema**: `{ "status": "success", "share_link": "https://onedrive.live.com/proposal_TechFlow" }`
+
+### 6. Slack Comms Ops (`COMMS_OPS`)
+* **Supervity Workflow ID**: `019e308d-dd05-7000-b8ae-2035b6e5b65c`
+* **Form Inputs**: `inputs[runId]`: Pipeline execution ID.
+* **Output Schema**: `{ "status": "success", "slack_sent": true }`
 
 ---
 
-## 🔍 Viewing Logs & Debugging
+## 💻 Tech Stack & Deployment Guide
 
-### Watch all logs at once
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **Backend API** | Python 3.11 + FastAPI + Gunicorn | Core API services and proxy coordination |
+| **Frontend Web** | Next.js 15 + React 19 + TailwindCSS | Premium VP Dashboard & interactive AgentMesh |
+| **Database ORM** | SQLite / PostgreSQL + SQLAlchemy + Alembic | Persistent schema migrations & audit logging |
+| **Containers** | Docker + Docker Compose | Development & staging isolation |
+
+### Getting Started (Locally)
+1. **Prepare Environment Settings**:
+   ```bash
+   cp .env.example .env
+   ```
+2. **Build and Spin Up Containers**:
+   ```bash
+   docker-compose up --build -d
+   ```
+3. **Database Setup & Seed Data**:
+   ```bash
+   # Reset local tables and populate seed records
+   docker-compose exec backend python scripts/reset_db.py
+   docker-compose exec backend python scripts/seed_db.py
+   ```
+4. **Access Panels**:
+   - **Frontend UI**: `http://localhost:3001`
+   - **Swagger Docs**: `http://localhost:8001/api/docs`
+
+---
+
+## 🧑‍💻 Developer Verification & Diagnostics
+
+### Viewing Logs
+To stream backend and container operations live:
 ```bash
-# macOS / Linux
-docker compose logs -f
-
-# Stop following with Ctrl+C
-```
-
-### Watch a specific service
-```bash
-# Backend only
 docker compose logs -f backend
-
-# Frontend only
-docker compose logs -f frontend
-
-# Database only
-docker compose logs -f postgres
 ```
 
-### Check if a service is healthy
+### TypeScript Validation & Build Compilation
+To run a production TypeScript type-check dry run:
 ```bash
-# Quick health check
-curl http://localhost:8001/api/health
-
-# Or check container status
-docker compose ps
+cd frontend
+npm run build
 ```
 
-### Restart a single service (without touching others)
-```bash
-docker compose restart frontend
-docker compose restart backend
-```
+> [!NOTE]
+> The backend handles client connection timeouts resiliently by employing a `120.0` seconds gateway timeout in `app/services/supervity.py`, preventing slow Claude inference models from aborting prematurely.
 
 ---
 
-## What's Included
+# 📈 PART 2: THE EXECUTIVE REVENUE PLAYBOOK
 
-### Backend (FastAPI + Python)
-- ✅ FastAPI with auto-generated Swagger docs
-- ✅ PostgreSQL database with Alembic migrations
-- ✅ Auth system with dev-mode bypass (`AUTH_BYPASS=true`)
-- ✅ Audit logging middleware (every request logged)
-- ✅ Items CRUD API (sample entity)
-- ✅ File storage API (local or cloud)
-- ✅ Role-based authorization engine
+## 👑 Strategic Overview: The Aegis Advantage
+In enterprise B2B sales, speed and compliance are often at war. Account Executives offer deep discounts to close deals quickly, resulting in profit margins leaking out of the pipeline. Meanwhile, manually copying data into CRM systems, generating enterprise proposals, and updating team Slack channels slows deal momentum.
 
-### Frontend (Next.js + React)
-- ✅ Premium glassmorphic UI with Framer Motion animations
-- ✅ Dashboard with stat cards and activity chart
-- ✅ AI Policies page with demo data (5 sample policies)
-- ✅ AI Insights page with demo data (patterns, anomalies, actions)
-- ✅ AI Manager chat interface
-- ✅ Workbench page
-- ✅ Settings page
-- ✅ Command palette (⌘K / Ctrl+K)
-
-### Infrastructure
-- ✅ Docker Compose for one-command startup
-- ✅ Pre-built production frontend (instant page loads)
-- ✅ Cross-platform (macOS, Windows, Linux)
+**Aegis Nexus solves this.** 
+Aegis Nexus acts as a transparent, automated operational partner. It ingests your raw Zoom call transcripts and instantly:
+* Parses customer pain points, BANT criteria, and prospect details.
+* Automatically registers lead details in your **Zoho CRM**.
+* Drafts a custom enterprise proposal inside **Microsoft OneDrive** matching corporate standards.
+* Notifies your entire revenue team inside **Slack** of updates.
+* **Critically**: Evaluates every deal against active corporate policies to ensure zero profit leakage.
 
 ---
 
-## What YOU Build
+## 🔮 The AgentMesh Dashboard: Transcending the Black Box
+Traditional AI assistants operate as a "black box" where you submit an input and hope the output is correct. Aegis Nexus introduces the **Supervity Interactive AgentMesh**—a visual, live-tracing console tailored for business leadership.
 
-This is a **starter template**. You need to connect these frontend shells to real AI logic:
-
-| Feature | Frontend Status | Your Task |
-|---------|----------------|-----------| 
-| **AI Manager** | ✅ Chat UI ready | Connect to your AI agent orchestration backend |
-| **AI Policies** | ✅ Demo data loaded | Build the policy engine that evaluates rules at runtime |
-| **AI Insights** | ✅ Demo data loaded | Build the analysis engine that generates insights from your data |
-| **Workbench** | ✅ UI shell ready | Build exception routing — when AI fails, send work items here |
-
-See **[`docs/command-center-guide.md`](docs/command-center-guide.md)** for the full architecture guide.
+* **Live Status Traces**: Watch the deal move through ingestion, parsing, margin checks, CRM syncing, document creation, and Slack notification in real time.
+* **Micro-Timers**: Instantly view how long each model execution took, ensuring full operational transparency.
+* **Data Trace Inspections**: With one click on `Inspect Data Trace`, you can view the exact underlying raw payloads, prompts, and JSON outputs parsed by our AI models.
 
 ---
 
-## Project Structure
+## 🚦 Human-in-the-Loop Guardrails: Compliance & Governance
 
-```
-AutoPilot-Template/
-├── app/                    # Backend (FastAPI)
-│   ├── main.py             # App entry point
-│   ├── security.py         # Auth + AUTH_BYPASS logic
-│   ├── authz.py            # Authorization engine
-│   ├── models/             # SQLAlchemy models
-│   ├── schemas/            # Pydantic schemas
-│   ├── routers/            # API endpoints
-│   ├── services/           # Business logic
-│   └── core/               # Database, storage
-├── frontend/               # Frontend (Next.js)
-│   ├── src/app/            # Pages (dashboard, AI, admin, etc.)
-│   ├── src/components/     # Reusable UI components
-│   └── src/lib/            # API client, utilities
-├── alembic/                # Database migrations
-├── scripts/                # Seed data, utilities
-├── docs/                   # Documentation
-│   ├── command-center-guide.md   # ⭐ What to build
-│   ├── hackathon-brief.md        # ⭐ Problem statements
-│   ├── design-system-template.md # UI patterns
-│   └── Audit System Guide.md     # Audit logging
-├── docker-compose.yml      # Service orchestration
-├── Dockerfile              # Backend container
-├── Makefile                # Dev commands (macOS/Linux)
-└── .env.example            # Environment config template
-```
+Aegis Nexus protects your margins from unauthorized discounting without halting business operations. When a salesperson offers a discount exceeding your preset threshold (e.g. 35%), the system springs into action:
+
+1. **Pipeline Halt**: The automated sync to Zoho CRM, OneDrive, and Slack is immediately paused at the **PolicyGuard Agent** stage.
+2. **VP Notification**: A prominent alert warns of critical compliance violations.
+3. **VP Override Panel**: A popup tailored for VP Sarah Jenkins prompts you to review the deal.
+4. **Approval & Resume**: You can type your strategic approval reason (e.g., *"Approved. Premium tier contract locked for 36 months to offset the discount"*), click approve, and the pipeline immediately dispatches all downstream actions!
+5. **Permanent Audit Log**: This override is securely saved in the SQLite compliance ledger for executive audit compliance.
 
 ---
 
-## Key Environment Variables
+## 📝 Managing Strategic Rules in the AI Policies Tab
+As market conditions change, your discount thresholds must adapt. Aegis Nexus enables you to adjust these policies dynamically:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_BYPASS` | `true` | Skip all auth (dev mode) |
-| `AUTH_DEBUG` | `true` | Verbose auth logging |
-| `APP_ENV` | `development` | Backend mode |
-| `DATABASE_URL` | auto-generated | PostgreSQL connection |
-| `FRONTEND_URL` | `http://localhost:3001` | CORS origin |
+1. Navigate to the **AI Policies** tab in the sidebar navigation.
+2. View your active policies, including discount margin limits, restricted competitors, and SLA requirements.
+3. Edit or upload a new markdown `DESIGN.md` configuration file.
+4. Click **Update Policies** to apply the new rules instantly across the RAG ingestion pipeline, instantly updating the guardrails for future sales evaluations.
 
 ---
 
-## 🛠️ Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| **Docker not found** | Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and make sure it's running |
-| **Port 3001 already in use** | Stop whatever is on that port: `lsof -ti:3001 \| xargs kill` (Mac) or change the port in `docker-compose.yml` |
-| **Port 5432 already in use** | You have a local PostgreSQL running. Stop it or change the port in `docker-compose.yml` |
-| **`make` not found (Windows)** | Use `docker compose` commands directly (see table above) or install make via `choco install make` |
-| **WSL error (Windows)** | Run `wsl --install` in PowerShell as Admin, then restart your PC |
-| **ERR_CONNECTION_RESET on localhost (Windows)** | WSL2's relay can intercept port 3001 via IPv6. Use `.\scripts\start.ps1` which handles this automatically, or manually run `wsl --shutdown` before `docker compose up --build -d`. |
-| **Containers crash-looping** | Check logs: `docker compose logs backend` — usually a missing env var or DB issue |
-| **Frontend shows blank page** | Check if backend is healthy: `curl http://localhost:8001/api/health` |
-| **Database connection refused** | Wait 10-15 seconds after startup — Postgres needs time to initialize on first run |
-
----
-
-## Documentation
-
-| Document | Purpose |
-|----------|---------| 
-| **[Command Center Guide](docs/command-center-guide.md)** | What is a Command Center, AI Policies, Insights, Manager, Workbench |
-| **[Hackathon Brief](docs/hackathon-brief.md)** | Problem statements, judging criteria |
-| **[Design System](docs/design-system-template.md)** | UI component patterns, colors, spacing |
-| **[Audit System](docs/Audit%20System%20Guide.md)** | Audit logging architecture |
-
----
-
-## Tech Stack
-
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **Backend** | Python 3.11 + FastAPI | API server |
-| **Frontend** | Next.js 15 + React 19 | Web dashboard |
-| **Database** | PostgreSQL 15 | Persistent storage |
-| **ORM** | SQLAlchemy 2 + Alembic | Data modeling + migrations |
-| **Auth** | NextAuth.js + JWT | Authentication (bypass-able) |
-| **UI** | Tailwind CSS + Framer Motion | Styling + animations |
-| **Containers** | Docker + Docker Compose | Development environment |
+## 🌟 The Business ROI
+* **95% Reduction in Administrative Overhead**: Deal registration, document drafting, and communications occur in parallel in seconds.
+* **100% Margin Governance**: No unapproved discounts or restricted terms bypass our compliance gate.
+* **Unprecedented Pipeline Speed**: What took days of back-and-forth approval loops now takes seconds with a simple compliance override.
