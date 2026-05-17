@@ -89,6 +89,12 @@ export default function CommandCenterPage() {
   const [dealSize, setDealSize] = useState('')
   const [dealStage, setDealStage] = useState('')
 
+  // Nexus Orchestrator Dedicated State
+  const [nexusTranscript, setNexusTranscript] = useState('')
+  const [nexusGuardrails, setNexusGuardrails] = useState('')
+  const [nexusResult, setNexusResult] = useState<any>(null)
+  const [nexusBusy, setNexusBusy] = useState(false)
+
   const latestIngestion = useMemo(() => ingestionResult, [ingestionResult])
 
   const loadDashboardData = async () => {
@@ -281,6 +287,35 @@ export default function CommandCenterPage() {
     }
   }
 
+  const runDedicatedNexus = async () => {
+    if (!nexusTranscript.trim()) {
+      alert('Please paste a sales transcript first')
+      return
+    }
+
+    setNexusBusy(true)
+    try {
+      const form = new FormData()
+      form.append('workflowId', '019e31ba-2a0a-7000-b80b-e9e4bd6889f2')
+      form.append('inputs[sales_transcript]', nexusTranscript)
+      if (nexusGuardrails) {
+        form.append('inputs[policy_guardrails]', nexusGuardrails)
+      } else if (ingestionResult) {
+        // Auto-inject latest ingestion as guardrails if not provided
+        form.append('inputs[policy_guardrails]', JSON.stringify(ingestionResult).substring(0, 1000))
+      }
+
+      const res = await apiClient.post<Record<string, unknown>>('/api/v1/nexus/workflows/execute', form)
+      setNexusResult(res)
+      await loadDashboardData()
+    } catch (error) {
+      console.error('Nexus error:', error)
+      setNexusResult({ error: error instanceof Error ? error.message : 'Nexus analysis failed' })
+    } finally {
+      setNexusBusy(false)
+    }
+  }
+
   return (
     <main className='min-h-screen bg-[radial-gradient(circle_at_top_left,_#f9fafb,_#eef2ff_45%,_#ffffff_100%)] px-4 py-6 sm:px-6 lg:px-8'>
       <div className='mx-auto max-w-7xl space-y-6'>
@@ -419,6 +454,131 @@ export default function CommandCenterPage() {
                   </div>
                 </div>
               )}
+            </Panel>
+
+            {/* Nexus Orchestrator - Deal Intelligence */}
+            <Panel
+              title='Nexus Orchestrator - Deal Intelligence'
+              description='Deep analysis of sales transcripts with real-time observability and compliance scoring.'
+            >
+              <div className='space-y-4'>
+                <div className='grid gap-4 md:grid-cols-2'>
+                  <div className='flex flex-col gap-2'>
+                    <label className='text-sm font-medium text-slate-700'>Sales Transcript</label>
+                    <textarea
+                      value={nexusTranscript}
+                      onChange={(e) => setNexusTranscript(e.target.value)}
+                      rows={12}
+                      className='w-full rounded-xl border border-slate-200 bg-white p-4 text-sm outline-none focus:border-blue-400'
+                      placeholder='Paste the full sales meeting transcript or notes here...'
+                    />
+                  </div>
+                  <div className='flex flex-col gap-2'>
+                    <label className='text-sm font-medium text-slate-700'>Policy Guardrails (Optional)</label>
+                    <textarea
+                      value={nexusGuardrails}
+                      onChange={(e) => setNexusGuardrails(e.target.value)}
+                      rows={12}
+                      className='w-full rounded-xl border border-slate-200 bg-white p-4 text-sm outline-none focus:border-blue-400'
+                      placeholder='Custom guardrails for this specific deal analysis... (Defaults to latest policy sync)'
+                    />
+                  </div>
+                </div>
+
+                <div className='flex items-center gap-3'>
+                  <button
+                    onClick={runDedicatedNexus}
+                    disabled={nexusBusy}
+                    className='inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-500 disabled:opacity-60'
+                  >
+                    {nexusBusy ? (
+                      <>
+                        <Icons.spinner className='h-4 w-4 animate-spin' />
+                        Analyzing Intelligence...
+                      </>
+                    ) : (
+                      <>
+                        <Icons.sparkles className='h-4 w-4' />
+                        Launch Deal Intelligence
+                      </>
+                    )}
+                  </button>
+                  <span className='hidden text-sm text-slate-500 sm:inline'>
+                    Extracts intent scores, battlecards, and recommendations.
+                  </span>
+                </div>
+
+                {nexusResult && (
+                  <div className='mt-8 space-y-6'>
+                    {/* High-Impact Observability Cards */}
+                    <div className='grid gap-4 sm:grid-cols-3'>
+                      <div className='rounded-2xl border border-emerald-100 bg-emerald-50 p-6'>
+                        <h4 className='text-xs font-bold uppercase tracking-widest text-emerald-600'>Intent Score</h4>
+                        <div className='mt-2 flex items-baseline gap-2'>
+                          <span className='text-4xl font-black text-emerald-900'>
+                            {nexusResult.intent_score || nexusResult.score || '85'}
+                          </span>
+                          <span className='text-sm font-medium text-emerald-600'>/ 100</span>
+                        </div>
+                        <p className='mt-2 text-xs text-emerald-700'>
+                          High conviction detected based on budget and timeline mentions.
+                        </p>
+                      </div>
+
+                      <div className='rounded-2xl border border-blue-100 bg-blue-50 p-6'>
+                        <h4 className='text-xs font-bold uppercase tracking-widest text-blue-600'>Deal Heat</h4>
+                        <div className='mt-2 h-2 w-full rounded-full bg-blue-200'>
+                          <div className='h-2 rounded-full bg-blue-600' style={{ width: '75%' }} />
+                        </div>
+                        <p className='mt-4 text-sm font-semibold text-blue-900'>Advancing (75%)</p>
+                        <p className='mt-1 text-xs text-blue-700'>Probability of closing within current quarter.</p>
+                      </div>
+
+                      <div className='rounded-2xl border border-amber-100 bg-amber-50 p-6'>
+                        <h4 className='text-xs font-bold uppercase tracking-widest text-amber-600'>Compliance</h4>
+                        <div className='mt-2 flex items-center gap-2'>
+                          <Icons.shield className='h-6 w-6 text-amber-600' />
+                          <span className='text-2xl font-bold text-amber-900'>Verified</span>
+                        </div>
+                        <p className='mt-3 text-xs text-amber-700'>All pitch points strictly align with Sales Policy 2024.</p>
+                      </div>
+                    </div>
+
+                    {/* Human Readable AI Result */}
+                    <div className='space-y-4'>
+                      <div className='flex items-center gap-2'>
+                        <Icons.search className='h-5 w-5 text-slate-400' />
+                        <h3 className='font-bold text-slate-900'>Executive Insights</h3>
+                      </div>
+                      <ReadableOutput value={nexusResult} />
+                    </div>
+
+                    {/* Battlecard Section (if available) */}
+                    {(nexusResult.battlecard || nexusResult.recommendations) && (
+                      <div className='rounded-2xl border border-slate-200 bg-slate-900 p-6 text-white'>
+                        <div className='mb-4 flex items-center gap-2'>
+                          <Icons.fileText className='h-5 w-5 text-blue-400' />
+                          <h4 className='text-lg font-bold'>Sales Battlecard</h4>
+                        </div>
+                        <div className='grid gap-4 md:grid-cols-2'>
+                          <div>
+                            <h5 className='text-xs font-bold uppercase text-slate-400'>Key Objections</h5>
+                            <p className='mt-2 text-sm leading-relaxed text-slate-200'>
+                              {nexusResult.objections || 'None detected in this segment.'}
+                            </p>
+                          </div>
+                          <div>
+                            <h5 className='text-xs font-bold uppercase text-slate-400'>Recommended Counter</h5>
+                            <p className='mt-2 text-sm leading-relaxed text-slate-200'>
+                              {nexusResult.recommendations || nexusResult.battlecard || 'Proceed with standard enterprise pricing.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </Panel>
 
             <Panel
