@@ -664,44 +664,58 @@ export default function CommandCenterPage() {
       // Step 1: Ingestion Config Lookup
       setMeshSteps(prev => ({
         ...prev,
-        ingestion: { status: 'running', input: 'Retrieving corporate policy RAG context from SQLite database...' }
+        ingestion: { status: 'running', input: 'Retrieving corporate policy RAG context...' }
       }))
       const startTimeIng = Date.now()
-      let ragRes = null
-      try {
-        ragRes = await apiClient.get<Record<string, any>>('/api/v1/nexus/rag-context')
-        if (ragRes && ragRes.status === 'success' && ragRes.policy_config) {
-          activePolicyText = JSON.stringify(ragRes.policy_config)
-          setMeshSteps(prev => ({
-            ...prev,
-            ingestion: {
-              status: 'success',
-              duration: (Date.now() - startTimeIng) / 1000,
-              input: 'GET /api/v1/nexus/rag-context',
-              output: `Loaded SQLite Policies successfully:\n${JSON.stringify(ragRes.policy_config, null, 2)}`
-            }
-          }))
-        } else {
+
+      if (nexusGuardrails.trim()) {
+        activePolicyText = nexusGuardrails.trim()
+        setMeshSteps(prev => ({
+          ...prev,
+          ingestion: {
+            status: 'success',
+            duration: (Date.now() - startTimeIng) / 1000,
+            input: 'Loaded from active Ingested Corporate Policies state',
+            output: `Using active ingested guardrails:\n${activePolicyText}`
+          }
+        }))
+      } else {
+        let ragRes = null
+        try {
+          ragRes = await apiClient.get<Record<string, any>>('/api/v1/nexus/rag-context')
+          if (ragRes && ragRes.status === 'success' && ragRes.policy_config) {
+            activePolicyText = JSON.stringify(ragRes.policy_config)
+            setMeshSteps(prev => ({
+              ...prev,
+              ingestion: {
+                status: 'success',
+                duration: (Date.now() - startTimeIng) / 1000,
+                input: 'GET /api/v1/nexus/rag-context',
+                output: `Loaded SQLite Policies successfully:\n${JSON.stringify(ragRes.policy_config, null, 2)}`
+              }
+            }))
+          } else {
+            setMeshSteps(prev => ({
+              ...prev,
+              ingestion: {
+                status: 'skipped',
+                duration: (Date.now() - startTimeIng) / 1000,
+                input: 'GET /api/v1/nexus/rag-context',
+                output: 'No active ingested policies found in SQLite. Proceeding with standard margin guardrails.'
+              }
+            }))
+          }
+        } catch (err) {
           setMeshSteps(prev => ({
             ...prev,
             ingestion: {
               status: 'skipped',
               duration: (Date.now() - startTimeIng) / 1000,
               input: 'GET /api/v1/nexus/rag-context',
-              output: 'No active ingested policies found in SQLite. Proceeding with standard margin guardrails.'
+              output: 'Failed to access local SQLite RAG table. Proceeding with default configurations.'
             }
           }))
         }
-      } catch (err) {
-        setMeshSteps(prev => ({
-          ...prev,
-          ingestion: {
-            status: 'skipped',
-            duration: (Date.now() - startTimeIng) / 1000,
-            input: 'GET /api/v1/nexus/rag-context',
-            output: 'Failed to access local SQLite RAG table. Proceeding with default configurations.'
-          }
-        }))
       }
 
       // Step 2: Lead Intel Agent (Claude 3 Opus)
@@ -891,6 +905,10 @@ export default function CommandCenterPage() {
 
       const res = await apiClient.post<Record<string, unknown>>('/api/v1/nexus/ingest-knowledge', form)
       setIngestionResult(res)
+      
+      const configToUse = res.data?.summaries || res.data || res
+      setNexusGuardrails(JSON.stringify(configToUse, null, 2))
+
       window.localStorage.setItem('aegis:last-ingestion-result', JSON.stringify(res))
       window.dispatchEvent(new CustomEvent('aegis:ingestion-updated', { detail: res }))
       await loadDashboardData()
@@ -1174,6 +1192,154 @@ export default function CommandCenterPage() {
                   </div>
                 </div>
 
+                {/* 1. Policy Document Ingestion (First Thing any VP does) */}
+                <div className='rounded-2xl border border-blue-100 bg-blue-50/20 p-5 shadow-sm space-y-4'>
+                  <div className='flex items-center justify-between border-b border-blue-100/50 pb-3'>
+                    <div>
+                      <h4 className='text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5'>
+                        📁 STEP 1: INGEST CORPORATE POLICIES (KNOWLEDGE BASE)
+                      </h4>
+                      <p className='text-[11px] text-blue-700 mt-0.5 leading-relaxed'>
+                        Upload your business policies, pipeline SOPs, and organizational hierarchies to automatically align our multi-agent framework.
+                      </p>
+                    </div>
+                    {ingestionResult && (
+                      <span className='rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 animate-pulse'>
+                        ✓ Active Policy Loaded
+                      </span>
+                    )}
+                  </div>
+
+                  <div className='grid gap-4 md:grid-cols-3'>
+                    <div className='flex flex-col gap-1.5'>
+                      <label className='text-xs font-bold text-slate-600 flex items-center gap-1'>
+                        ⚖️ Sales Discount Policy
+                      </label>
+                      <div className='relative flex items-center bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 cursor-pointer shadow-sm transition'>
+                        <input 
+                          type='file' 
+                          accept='.pdf,.txt,.doc,.docx' 
+                          className='absolute inset-0 opacity-0 cursor-pointer w-full' 
+                          onChange={(e) => setPolicyFiles((p) => ({ ...p, policy: e.target.files?.[0] }))} 
+                        />
+                        <span className='text-xs font-medium text-slate-500 truncate'>
+                          {policyFiles.policy ? `📄 ${policyFiles.policy.name}` : 'Choose Sales Policy file'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className='flex flex-col gap-1.5'>
+                      <label className='text-xs font-bold text-slate-600 flex items-center gap-1'>
+                        🛠️ Pipeline SOP Rules
+                      </label>
+                      <div className='relative flex items-center bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 cursor-pointer shadow-sm transition'>
+                        <input 
+                          type='file' 
+                          accept='.pdf,.txt,.doc,.docx' 
+                          className='absolute inset-0 opacity-0 cursor-pointer w-full' 
+                          onChange={(e) => setPolicyFiles((p) => ({ ...p, sop: e.target.files?.[0] }))} 
+                        />
+                        <span className='text-xs font-medium text-slate-500 truncate'>
+                          {policyFiles.sop ? `📄 ${policyFiles.sop.name}` : 'Choose SOP Rules file'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className='flex flex-col gap-1.5'>
+                      <label className='text-xs font-bold text-slate-600 flex items-center gap-1'>
+                        👥 Org Hierarchy
+                      </label>
+                      <div className='relative flex items-center bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 cursor-pointer shadow-sm transition'>
+                        <input 
+                          type='file' 
+                          accept='.pdf,.txt,.doc,.docx' 
+                          className='absolute inset-0 opacity-0 cursor-pointer w-full' 
+                          onChange={(e) => setPolicyFiles((p) => ({ ...p, hierarchy: e.target.files?.[0] }))} 
+                        />
+                        <span className='text-xs font-medium text-slate-500 truncate'>
+                          {policyFiles.hierarchy ? `📄 ${policyFiles.hierarchy.name}` : 'Choose Hierarchy file'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='flex items-center gap-3 pt-2'>
+                    <button
+                      type='button'
+                      onClick={async () => {
+                        if (!policyFiles.policy || !policyFiles.sop || !policyFiles.hierarchy) {
+                          alert('Please select all three files (Sales Policy, SOP, and Org Hierarchy) first.')
+                          return
+                        }
+                        setNexusBusy(true)
+                        try {
+                          const form = new FormData()
+                          form.append('sales_policy_file', policyFiles.policy)
+                          form.append('pipeline_sop_file', policyFiles.sop)
+                          form.append('org_hierarchy_file', policyFiles.hierarchy)
+                          
+                          const res = await apiClient.post<Record<string, any>>('/api/v1/nexus/ingest-knowledge', form)
+                          setIngestionResult(res)
+                          
+                          const configToUse = res.data?.summaries || res.data || res
+                          setNexusGuardrails(JSON.stringify(configToUse, null, 2))
+                          
+                          alert('Corporate Policies Ingested & Synced successfully! Alignment rules are now live.')
+                        } catch (err) {
+                          console.error(err)
+                          alert('Failed to ingest corporate policies. Please try again.')
+                        } finally {
+                          setNexusBusy(false)
+                        }
+                      }}
+                      disabled={nexusBusy}
+                      className='inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-blue-500/10 hover:bg-blue-500 transition disabled:opacity-60'
+                    >
+                      {nexusBusy ? (
+                        <>
+                          <Icons.activity className='h-3.5 w-3.5 animate-spin' />
+                          Parsing Knowledge base...
+                        </>
+                      ) : (
+                        <>
+                          <Icons.upload className='h-3.5 w-3.5' />
+                          Ingest & Sync Active Corporate Policies
+                        </>
+                      )}
+                    </button>
+                    {ingestionResult && (
+                      <span className='text-[11px] text-slate-500 font-medium'>
+                        Last Ingested: {new Date().toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {nexusGuardrails && (
+                    <div className='mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300'>
+                      <div className='flex items-center justify-between mb-2'>
+                        <span className='text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5'>
+                          <span className='h-2 w-2 rounded-full bg-emerald-500 animate-pulse' />
+                          Active Ingested Policy JSON
+                        </span>
+                        <button
+                          type='button'
+                          onClick={() => {
+                            navigator.clipboard.writeText(nexusGuardrails)
+                            alert('Policy JSON copied to clipboard!')
+                          }}
+                          className='inline-flex items-center gap-1 rounded bg-slate-200 hover:bg-slate-300 px-2 py-1 text-[11px] font-bold text-slate-700 transition'
+                        >
+                          <Icons.copy className='h-3 w-3' />
+                          Copy JSON
+                        </button>
+                      </div>
+                      <pre className='text-xs text-slate-600 font-mono bg-white border border-slate-100 p-3 rounded-lg overflow-x-auto max-h-48 leading-relaxed shadow-inner select-all'>
+                        {nexusGuardrails}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+
                 <div className='grid gap-4 md:grid-cols-2'>
                   <div className='flex flex-col gap-2'>
                     <div className='flex items-center justify-between'>
@@ -1183,7 +1349,6 @@ export default function CommandCenterPage() {
                           type='button'
                           onClick={() => {
                             setNexusTranscript(SAMPLE_SUCCESS_TRANSCRIPT)
-                            setNexusGuardrails('')
                           }}
                           className='rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 border border-blue-200 hover:bg-blue-100 transition'
                         >
@@ -1193,7 +1358,6 @@ export default function CommandCenterPage() {
                           type='button'
                           onClick={() => {
                             setNexusTranscript(SAMPLE_VIOLATION_TRANSCRIPT)
-                            setNexusGuardrails('')
                           }}
                           className='rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200 hover:bg-amber-100 transition'
                         >
