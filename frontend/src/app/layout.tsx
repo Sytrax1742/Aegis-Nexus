@@ -19,8 +19,8 @@ const geologica = Geologica({
 })
 
 export const metadata = {
-  title: 'AutoPilot Command Center',
-  description: 'AI Command Center — Build, govern, and monitor your AI workforce',
+  title: 'Sales Command Center',
+  description: 'Supervity-powered command center for lead intake, deal qualification, approvals, and audit trails',
 }
 
 export default function RootLayout({

@@ -21,6 +21,7 @@ export default function AdminSettingsPage() {
   const [sopFile, setSopFile] = useState<File | null>(null)
   const [hierarchyFile, setHierarchyFile] = useState<File | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [ingestionResult, setIngestionResult] = useState<any | null>(null)
   
   // File input refs
   const policyFileInputRef = useRef<HTMLInputElement>(null)
@@ -28,6 +29,7 @@ export default function AdminSettingsPage() {
   const hierarchyFileInputRef = useRef<HTMLInputElement>(null)
   
   const isAdmin = session?.roles?.includes('admin')
+  const syncTimeoutMs = 120000
 
   useEffect(() => {
     if (sessionStatus === 'unauthenticated') router.push('/auth/signin')
@@ -53,15 +55,27 @@ export default function AdminSettingsPage() {
     
     setIsSyncing(true)
     try {
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), syncTimeoutMs)
+
       const formData = new FormData()
       formData.append('sales_policy_file', policyFile)
       formData.append('pipeline_sop_file', sopFile)
       formData.append('org_hierarchy_file', hierarchyFile)
 
-      await apiClient.post('/api/v1/nexus/ingest-knowledge', formData)
+      const res = await apiClient.post<any>('/api/v1/nexus/ingest-knowledge', formData, {
+        signal: controller.signal,
+      })
+
+      // Capture the full JSON response so the UI can show the Supervity output
+      setIngestionResult(res)
+      window.localStorage.setItem('aegis:last-ingestion-result', JSON.stringify(res))
+      window.dispatchEvent(new CustomEvent('aegis:ingestion-updated', { detail: res }))
+
+      window.clearTimeout(timeoutId)
       
-      toast.success('Aegis Brain Updated', { 
-        description: 'Orchestrator is now policy-aware.' 
+      toast.success(res?.message || 'Aegis Brain Updated', { 
+        description: res?.data ? 'Aegis Brain is now loaded with Corporate Policy 2026.' : 'Aegis Brain Updated'
       })
       
       // Clear files after successful sync
@@ -72,8 +86,22 @@ export default function AdminSettingsPage() {
       if (sopFileInputRef.current) sopFileInputRef.current.value = ''
       if (hierarchyFileInputRef.current) hierarchyFileInputRef.current.value = ''
     } catch (error) {
-      toast.error('Sync Failed', { 
-        description: error instanceof Error ? error.message : 'Could not connect to Supervity.' 
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        toast.error('Sync Still Processing', {
+          description: 'The cloud sync is still running. Try again in a moment.',
+        })
+        return
+      }
+
+      const responseBody = error instanceof Error ? (error as any).response?.body : null
+      if (responseBody) {
+        setIngestionResult(responseBody)
+        window.localStorage.setItem('aegis:last-ingestion-result', JSON.stringify(responseBody))
+        window.dispatchEvent(new CustomEvent('aegis:ingestion-updated', { detail: responseBody }))
+      }
+
+      toast.error('Sync Failed', {
+        description: error instanceof Error ? error.message : 'Could not connect to Supervity.',
       })
     } finally {
       setIsSyncing(false)
@@ -289,6 +317,27 @@ export default function AdminSettingsPage() {
           <li>✓ No manual governance—pure policy-driven intelligence.</li>
         </ul>
       </motion.div>
+
+      {/* Ingestion Result */}
+      {ingestionResult && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className='relative overflow-hidden'>
+            <CardHeader>
+              <CardTitle>Ingestion Result</CardTitle>
+              <CardDescription>Raw response from knowledge ingestion (Supervity)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <pre className='whitespace-pre-wrap text-xs'>
+                {JSON.stringify(ingestionResult, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,12 @@
 import { getSession } from 'next-auth/react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+const CLIENT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+const SERVER_API_URL = process.env.INTERNAL_API_URL || CLIENT_API_URL
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || ''
+
+function getApiUrl() {
+  return typeof window === 'undefined' ? SERVER_API_URL : CLIENT_API_URL
+}
 
 /**
  * A robust API client that handles authentication and base path resolution.
@@ -18,8 +23,8 @@ async function apiClientFetch<T = unknown>(endpoint: string, options: RequestIni
     headers.set('Authorization', `Bearer ${session.accessToken}`)
   }
 
-  // Construct the full URL: http://localhost:8001/app1/api/test
-  const fullUrl = `${API_URL}${BASE_PATH}${endpoint}`
+  // Construct the full URL with Docker-safe routing for both browser and server execution.
+  const fullUrl = `${getApiUrl()}${BASE_PATH}${endpoint}`
 
   const response = await fetch(fullUrl, { ...options, headers })
 
@@ -32,7 +37,9 @@ async function apiClientFetch<T = unknown>(endpoint: string, options: RequestIni
     const errorData = await response.json().catch(() => ({
       detail: response.statusText,
     }))
-    throw new Error(errorData.detail || 'An API error occurred.')
+    const err = new Error(errorData.detail || 'An API error occurred.') as Error & { response?: any }
+    err.response = { status: response.status, body: errorData }
+    throw err
   }
 
   // Handle responses with no content

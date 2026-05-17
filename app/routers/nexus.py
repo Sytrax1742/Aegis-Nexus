@@ -30,6 +30,7 @@ WORKFLOW_IDS = {
     "CRM_OPS": "019e307e-2f53-7000-a9c8-25ae89119cf9",
     "DOC_OPS": "019e3089-2ae9-7000-90c5-f6e1e1269002",
     "COMMS_OPS": "019e308d-dd05-7000-b8ae-2035b6e5b65c",
+    "NEXUS_ORCHESTRATOR": SUPERVITY_ORCHESTRATOR_ID,
 }
 
 class IngestKnowledgePayload(BaseModel):
@@ -50,97 +51,116 @@ class ResolveExceptionPayload(BaseModel):
     input_data: dict
 
 
+def _resolve_workflow_id(workflow_key: str | None) -> str | None:
+    if not workflow_key:
+        return None
+
+    workflow_key_upper = workflow_key.strip().upper()
+    if workflow_key_upper in WORKFLOW_IDS and WORKFLOW_IDS[workflow_key_upper]:
+        return WORKFLOW_IDS[workflow_key_upper]
+
+    for key, value in WORKFLOW_IDS.items():
+        if value and value == workflow_key:
+            return value
+
+    return workflow_key
+
+
 @router.post("/ingest-knowledge")
 async def ingest_knowledge(
-    sales_policy_file: UploadFile = File(..., description="Sales discount policy document"),
-    pipeline_sop_file: UploadFile = File(..., description="Sales pipeline SOP document"),
-    org_hierarchy_file: UploadFile = File(..., description="Organization hierarchy document"),
-    current_user: dict = Depends(get_current_user),
+    sales_policy_file: UploadFile = File(...),
+    pipeline_sop_file: UploadFile = File(...),
+    org_hierarchy_file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
-    """
-    Ingest corporate policies and procedures from file uploads into the knowledge base.
-    
-    Accepts three document files:
-    - sales_policy_file: Sales discount policy (txt, pdf, or doc)
-    - pipeline_sop_file: Sales pipeline SOP (txt, pdf, or doc)
-    - org_hierarchy_file: Organization hierarchy (txt, pdf, or doc)
-    
-    Calls the Knowledge Agent to process the documents and stores the
-    resulting policy configuration in the settings table for use by
-    the Orchestrator when processing deals.
-    """
+    """Ingests the Trinity of Knowledge and caches the structured brain."""
     try:
-        log.info(
-            f"Ingesting knowledge documents: "
-            f"{sales_policy_file.filename}, "
-            f"{pipeline_sop_file.filename}, "
-            f"{org_hierarchy_file.filename}"
-        )
-
-        # Prepare files dictionary for Supervity API
-        # Format: "inputs[field_name]": (filename, file_object, content_type)
+        # Construct the binary courier payload
         files = {
             "inputs[sales_discount_policy]": (sales_policy_file.filename, sales_policy_file.file, sales_policy_file.content_type),
             "inputs[sales_pipeline_sop]": (pipeline_sop_file.filename, pipeline_sop_file.file, pipeline_sop_file.content_type),
             "inputs[org_hierarchy]": (org_hierarchy_file.filename, org_hierarchy_file.file, org_hierarchy_file.content_type)
         }
 
-        # Call the Knowledge Ingestion Agent with file uploads
-        result = await supervity_service.execute_workflow(
+        # Fire the Knowledge Agent
+        raw_result = await supervity_service.execute_workflow(
             workflow_id=WORKFLOW_IDS["KNOWLEDGE_INGESTION"],
-            files=files,
+            files=files
         )
 
-        # Save the policy config to the settings table
-        policy_config_json = json.dumps(result)
-        
-        # Check if the key already exists
-        existing_config = (
-            db.query(Settings)
-            .filter(Settings.key == "active_policy_config")
-            .first()
-        )
+        # --- RESPONSE NORMALIZATION ---
+        # Supervity returns a dictionary. We want to ensure we save the core JSON.
+        import json
+        policy_json_str = json.dumps(raw_result)
 
-        if existing_config:
-            existing_config.value = policy_config_json
+        # Save to SQLite 'settings' table
+        existing_setting = db.query(Settings).filter(Settings.key == "active_policy_config").first()
+        if existing_setting:
+            existing_setting.value = policy_json_str
         else:
-            new_config = Settings(
-                key="active_policy_config",
-                value=policy_config_json,
-                description="Active corporate policy configuration from Knowledge Agent",
-            )
-            db.add(new_config)
+            new_setting = Settings(key="active_policy_config", value=policy_json_str)
+            db.add(new_setting)
 
         db.commit()
 
-        # Log the successful ingestion
-        await audit.log(
-            action="nexus.ingest_knowledge",
-            description=f"Knowledge documents ingested from files: {sales_policy_file.filename}, {pipeline_sop_file.filename}, {org_hierarchy_file.filename}",
-            actor=current_user,
-            success=True,
-            resource_type="policy_config",
-            resource_id="active_policy_config",
+        await audit.log(action="nexus.knowledge_synced", description="Corporate Trinity synced to local cache.", actor=current_user, success=True)
+        
+        return {"status": "success", "message": "Aegis Brain Sync Complete", "data": raw_result}
+
+    except Exception as e:
+        log.error(f"Sync Logic Failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync Failed: {str(e)}")
+
+
+@router.post("/workflows/execute")
+async def execute_workflow_proxy(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Generic multipart proxy to Supervity workflows.
+
+    Accepts the documented workflowId plus any inputs[...] fields and file fields,
+    then forwards them through the backend so the browser never needs the Supervity token.
+    """
+    form = await request.form()
+
+    workflow_id = _resolve_workflow_id(str(form.get("workflowId") or form.get("operatorKey") or ""))
+    if not workflow_id:
+        raise HTTPException(status_code=400, detail="workflowId or operatorKey is required")
+
+    inputs: dict[str, str] = {}
+    files: dict[str, tuple[str, object, str | None]] = {}
+
+    for key, value in form.multi_items():
+        if key in {"workflowId", "operatorKey"}:
+            continue
+
+        if hasattr(value, "filename") and hasattr(value, "file"):
+            files[key] = (value.filename, value.file, getattr(value, "content_type", None))
+            continue
+
+        field_key = key
+        if key.startswith("inputs[") and key.endswith("]"):
+            field_key = key[len("inputs[") : -1]
+        inputs[field_key] = str(value)
+
+    try:
+        result = await supervity_service.execute_workflow(
+            workflow_id=workflow_id,
+            inputs=inputs or None,
+            files=files or None,
         )
 
         return {
             "status": "success",
-            "message": "Knowledge base updated with policy documents from file uploads",
-            "policy_config": result,
+            "workflowId": workflow_id,
+            "data": result,
         }
-
     except Exception as e:
-        log.error(f"Knowledge ingestion failed: {e}")
-        await audit.log(
-            action="nexus.ingest_knowledge",
-            description=f"Knowledge ingestion failed: {str(e)}",
-            actor=current_user,
-            success=False,
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Knowledge ingestion failed: {str(e)}"
-        )
+        log.error(f"Workflow proxy failed for {workflow_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
 
 @router.get("/rag-context")
 async def get_rag_context(
@@ -231,44 +251,122 @@ async def orchestrate_pipeline(
     }
 
     # Step 3: Execute the Supervity Orchestrator (ONE async call)
+    orchestrator_id = SUPERVITY_ORCHESTRATOR_ID or WORKFLOW_IDS.get("LEAD_INTEL")
     try:
         result = await supervity_service.execute_workflow(
-            workflow_id=SUPERVITY_ORCHESTRATOR_ID,
+            workflow_id=orchestrator_id,
             inputs=orchestrator_inputs,
         )
 
-        log.info(f"Orchestrator execution initiated. Result: {result}")
+        log.info(f"Orchestrator execution returned. Result: {result}")
 
-        # Step 4: Capture the runId from the Supervity response
-        run_id = result.get("runId") or result.get("workflow_run_id") or result.get("id")
-        
-        if not run_id:
-            log.error(f"No runId found in Supervity response: {result}")
-            raise HTTPException(
-                status_code=500,
-                detail="Invalid response from Orchestrator: missing runId",
+        # Step 4: If the orchestrator indicates it is WAITING_FOR_INPUT, persist a pending audit log and return to UI
+        if isinstance(result, dict) and result.get("status") == "WAITING_FOR_INPUT":
+            run_id = result.get("runId")
+            new_log_entry = AuditLog(
+                action="nexus.orchestrate",
+                description=f"Deal orchestration awaiting human input",
+                actor_email=current_user.get("email", "system"),
+                success=False,  # pending
+                severity="WARN",
+                resource_type="deal",
+                resource_id=str(run_id),
             )
+            db.add(new_log_entry)
+            db.commit()
 
-        # Step 5: Save a new log entry with status = PENDING
-        new_log_entry = AuditLog(
+            return {
+                "status": "WAITING_FOR_INPUT",
+                "runId": run_id,
+                "message": "Orchestrator paused and requires human input",
+            }
+
+        # Otherwise, treat as completed/approved and proceed to execution layer
+        run_id = (
+            result.get("runId")
+            or result.get("workflow_run_id")
+            or result.get("id")
+            or None
+        )
+
+        if not run_id:
+            log.warning("No runId found in orchestrator response; generating fallback id")
+            run_id = f"local-{int(__import__('time').time())}"
+
+        # Persist initial orchestration entry as succeeded (we will update if any downstream fails)
+        orchestration_log = AuditLog(
             action="nexus.orchestrate",
-            description=f"Deal orchestration initiated with Supervity Orchestrator",
+            description=f"Deal orchestration completed (orchestrator returned).",
             actor_email=current_user.get("email", "system"),
-            success=False,  # False means status is PENDING (awaiting completion)
+            success=True,
             severity="INFO",
             resource_type="deal",
             resource_id=str(run_id),
         )
-        db.add(new_log_entry)
+        db.add(orchestration_log)
         db.commit()
 
-        log.info(f"Created audit log entry for orchestration run: {run_id}")
+        # Step 5: Fire Execution Layer agents (CRM, DOC, COMMS) — best-effort, log each outcome
+        execution_results = {}
+        execution_workflows = [
+            ("CRM_OPS", "nexus.execute.crm", "Creates Deal and Lead in Zoho CRM"),
+            ("DOC_OPS", "nexus.execute.doc", "Generates proposal in OneDrive and returns share link"),
+            ("COMMS_OPS", "nexus.execute.comms", "Sends Slack notification with links"),
+        ]
 
-        # Step 6: Return the runId to the frontend
+        for key, action_name, desc in execution_workflows:
+            try:
+                wf_id = WORKFLOW_IDS.get(key)
+                if not wf_id:
+                    raise RuntimeError(f"Workflow id for {key} missing")
+
+                exec_inputs = {
+                    "runId": run_id,
+                    "transcript": payload.transcript,
+                }
+
+                exec_result = await supervity_service.execute_workflow(
+                    workflow_id=wf_id,
+                    inputs=exec_inputs,
+                )
+
+                execution_results[key] = exec_result
+
+                exec_log = AuditLog(
+                    action=action_name,
+                    description=desc,
+                    actor_email=current_user.get("email", "system"),
+                    success=True,
+                    severity="INFO",
+                    resource_type="deal",
+                    resource_id=str(run_id),
+                )
+                db.add(exec_log)
+                db.commit()
+
+            except Exception as e:
+                log.error(f"Execution workflow {key} failed for run {run_id}: {e}")
+                # Log failure but continue with others
+                fail_log = AuditLog(
+                    action=f"{action_name}.error",
+                    description=f"Execution failed: {str(e)}",
+                    actor_email=current_user.get("email", "system"),
+                    success=False,
+                    severity="ERROR",
+                    resource_type="deal",
+                    resource_id=str(run_id),
+                )
+                db.add(fail_log)
+                db.commit()
+                execution_results[key] = {"error": str(e)}
+
+        # Return combined response including execution outputs so UI can display links/status
         return {
-            "status": "pending",
+            "status": "success",
             "runId": run_id,
-            "message": "Deal orchestration initiated. Use runId to track progress.",
+            "orchestrator_response": result,
+            "execution_results": execution_results,
+            "message": "Pipeline executed and execution layer dispatched",
         }
 
     except Exception as e:
@@ -277,6 +375,38 @@ async def orchestrate_pipeline(
             status_code=500,
             detail=f"Orchestrator execution failed: {str(e)}",
         )
+
+
+@router.get("/metrics")
+async def get_metrics(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """
+    Returns simple ROI-style metrics derived from execution logs.
+
+    - administrative_hours_saved: estimated hours saved by automation
+    - margin_protected_pct: estimated margin protected from rogue discounts
+    - compliance_rate: percent of orchestrations that completed without halts
+    """
+    try:
+        total_orchestrations = db.query(AuditLog).filter(AuditLog.action == "nexus.orchestrate").count()
+        executed_crm = db.query(AuditLog).filter(AuditLog.action == "nexus.execute.crm", AuditLog.success == True).count()
+        executed_doc = db.query(AuditLog).filter(AuditLog.action == "nexus.execute.doc", AuditLog.success == True).count()
+        executed_comms = db.query(AuditLog).filter(AuditLog.action == "nexus.execute.comms", AuditLog.success == True).count()
+
+        # Simple heuristics for demo metrics
+        successful_executions = max(executed_crm, executed_doc, executed_comms)
+        administrative_hours_saved = successful_executions * 40  # assume 40 hours saved per successful automation
+        margin_protected_pct = round(min(100.0, (successful_executions / max(1, total_orchestrations)) * 15.0), 1)
+        compliance_rate = round((1.0 - (db.query(AuditLog).filter(AuditLog.action.like("nexus.orchestrate%"), AuditLog.success == False).count() / max(1, total_orchestrations))) * 100.0, 1) if total_orchestrations > 0 else 100.0
+
+        return {
+            "administrative_hours_saved": administrative_hours_saved,
+            "margin_protected_pct": margin_protected_pct,
+            "compliance_rate": compliance_rate,
+            "total_orchestrations": total_orchestrations,
+        }
+    except Exception as e:
+        log.error(f"Failed to compute metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/resolve-exception")
 async def resolve_exception(
