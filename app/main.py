@@ -43,6 +43,7 @@ from .routers import (
     health_router,
     items_router,
     nexus_router,
+    ai_router,
 )
 from . import routers
 from .security import get_current_user, verify_access
@@ -159,12 +160,23 @@ api_router.include_router(examples_router)
 # Aegis-Nexus AI Command Center
 api_router.include_router(nexus_router)
 
+# AI Endpoints (FastRouter/Claude integration)
+api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
+
 # NLP summarization for FastRouter
 try:
     from .routers import nlp as nlp_router
     api_router.include_router(nlp_router.router, prefix="/v1/nlp", tags=["nlp"])
 except ImportError:
     log.warning("NLP router not available")
+
+# Zoho CRM Integration
+try:
+    from .routers.zoho import router as zoho_router
+    api_router.include_router(zoho_router, prefix="/zoho", tags=["zoho"])
+    log.info("Zoho CRM router registered at /api/zoho")
+except ImportError:
+    log.warning("Zoho CRM router not available")
 
 
 # =============================================================================

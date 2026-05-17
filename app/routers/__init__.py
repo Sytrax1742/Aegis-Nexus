@@ -12,6 +12,7 @@ from .examples import router as examples_router
 from .health import router as health_router
 from .items import router as items_router
 from .nexus import router as nexus_router
+from .ai import router as ai_router
 
 __all__ = [
     "health_router",
@@ -21,4 +22,5 @@ __all__ = [
     "items_router",
     "examples_router",
     "nexus_router",
+    "ai_router",
 ]

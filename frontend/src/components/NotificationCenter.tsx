@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { apiClient } from '@/lib/api-client'
 
 // Notification types
 type NotificationType = 'info' | 'success' | 'warning' | 'error'
@@ -21,34 +22,6 @@ interface Notification {
   timestamp: Date
   read: boolean
 }
-
-// Mock notifications - in real app, this would come from a store/API
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'success',
-    title: 'Diagnostics Complete',
-    message: 'All systems are running normally.',
-    timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 min ago
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'info',
-    title: 'New Feature Available',
-    message: 'Check out the new workbench improvements.',
-    timestamp: new Date(Date.now() - 30 * 60 * 1000), // 30 min ago
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'warning',
-    title: 'Token Expiring Soon',
-    message: 'Your access token will expire in 24 hours.',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-    read: true,
-  },
-]
 
 const typeConfig: Record<
   NotificationType,
@@ -84,6 +57,28 @@ function formatRelativeTime(date: Date): string {
   if (diffHours < 24) return `${diffHours}h ago`
   if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString()
+}
+
+// Map audit log actions to notification types
+function mapActionToType(action: string, success: boolean | string): NotificationType {
+  if (String(success) === 'false' || String(success) === 'False') return 'error'
+  if (action.includes('error')) return 'error'
+  if (action.includes('orchestrate')) return 'info'
+  if (action.includes('resolve')) return 'success'
+  if (action.includes('knowledge')) return 'success'
+  if (String(success) === 'PROCESSING') return 'warning'
+  return 'info'
+}
+
+function mapActionToTitle(action: string): string {
+  if (action.includes('knowledge')) return 'Knowledge Synced'
+  if (action.includes('orchestrate') && action.includes('error')) return 'Pipeline Error'
+  if (action.includes('orchestrate')) return 'Pipeline Executed'
+  if (action.includes('resolve')) return 'Exception Resolved'
+  if (action.includes('crm')) return 'CRM Updated'
+  if (action.includes('doc')) return 'Document Generated'
+  if (action.includes('comms')) return 'Notification Sent'
+  return action.replace('nexus.', '').replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
 interface NotificationItemProps {
@@ -140,19 +135,56 @@ function NotificationItem({
 }
 
 export function NotificationCenter() {
-  const [notifications, setNotifications] = React.useState(mockNotifications)
+  const [notifications, setNotifications] = React.useState<Notification[]>([])
+  const [readIds, setReadIds] = React.useState<Set<string>>(new Set())
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  // Fetch live notifications from the audit logs
+  React.useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        interface AuditLogEntry {
+          timestamp: string
+          action: string
+          status: boolean | string
+        }
+        const logs = await apiClient.get<AuditLogEntry[]>('/api/v1/nexus/logs')
+        if (Array.isArray(logs) && logs.length > 0) {
+          const mapped: Notification[] = logs.slice(0, 8).map((log, idx) => ({
+            id: `live-${idx}-${log.timestamp}`,
+            type: mapActionToType(log.action, log.status),
+            title: mapActionToTitle(log.action),
+            message: log.action.replace('nexus.', ''),
+            timestamp: new Date(log.timestamp),
+            read: readIds.has(`live-${idx}-${log.timestamp}`),
+          }))
+          setNotifications(mapped)
+        }
+      } catch {
+        // Silently fail — no notifications is fine
+      }
+    }
+
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 5000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length
 
   const markAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    )
+    setReadIds((prev) => new Set([...prev, id]))
   }
 
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    setReadIds(new Set(notifications.map((n) => n.id)))
   }
+
+  // Apply read state
+  const displayNotifications = notifications.map(n => ({
+    ...n,
+    read: readIds.has(n.id),
+  }))
 
   return (
     <Popover>
@@ -198,7 +230,7 @@ export function NotificationCenter() {
 
         {/* Notification list */}
         <div className='max-h-[300px] overflow-y-auto p-2'>
-          {notifications.length === 0 ? (
+          {displayNotifications.length === 0 ? (
             <div className='py-8 text-center'>
               <div className='mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/50'>
                 <Icons.checkCircle className='h-6 w-6 text-muted-foreground' />
@@ -207,12 +239,12 @@ export function NotificationCenter() {
                 All caught up!
               </p>
               <p className='mt-1 text-xs text-muted-foreground'>
-                No new notifications
+                Pipeline activity will appear here
               </p>
             </div>
           ) : (
             <div className='space-y-1'>
-              {notifications.map((notification) => (
+              {displayNotifications.map((notification) => (
                 <NotificationItem
                   key={notification.id}
                   notification={notification}
@@ -224,13 +256,13 @@ export function NotificationCenter() {
         </div>
 
         {/* Footer */}
-        {notifications.length > 0 && (
+        {displayNotifications.length > 0 && (
           <div className='border-t border-border/50 p-2'>
             <Button
               variant='ghost'
               className='w-full text-brand-navy'
             >
-              View all notifications
+              View all activity
             </Button>
           </div>
         )}
@@ -238,4 +270,3 @@ export function NotificationCenter() {
     </Popover>
   )
 }
-

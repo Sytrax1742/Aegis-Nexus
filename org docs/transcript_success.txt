@@ -1,0 +1,7 @@
+Om (AE): Hi Sarah, great to connect. To kick things off, what's the main bottleneck for TechFlow right now?
+Sarah (Prospect): Honestly, our current setup with DataSync is killing us. The API latency is too high, and it's causing data drops. We need a replacement.
+Om: We can definitely solve that latency issue. What timeline are you looking at to deploy a new solution?
+Sarah: I am the final sign-off on this, and we need this implemented by the end of Q3. 
+Om: Understood. Have you allocated a budget for this migration?
+Sarah: Yes, we have $45,000 earmarked for this project.
+Om: Perfect. I'll get my Sales Engineer to draft a technical proposal and I'll email it to you by tomorrow.

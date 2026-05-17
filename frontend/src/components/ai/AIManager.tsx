@@ -241,13 +241,13 @@ export function AIManager() {
                         id="ai-manager-title"
                         className="text-xl font-semibold text-brand-navy"
                       >
-                        AutoPilot AI
+                        Aegis-Nexus AI
                       </h2>
                       <p 
                         id="ai-manager-description"
                         className="text-sm text-muted-foreground"
                       >
-                        Your intelligent command center assistant
+                        Sales Intelligence &bull; Grounded in Corporate Policy
                       </p>
                     </div>
                   </div>
@@ -316,10 +316,10 @@ export function AIManager() {
                     </div>
                     
                     <h3 className="font-display text-xl font-semibold text-brand-navy">
-                      How can I help you?
+                      Hi Sarah, how can I help?
                     </h3>
                     <p className="mt-2 max-w-sm text-muted-foreground">
-                      Ask me anything about your data, or use a quick action below.
+                      I&apos;m grounded in your corporate policies and connected to Supervity agents.
                     </p>
 
                     {/* Quick Actions - Capability Bubbles */}

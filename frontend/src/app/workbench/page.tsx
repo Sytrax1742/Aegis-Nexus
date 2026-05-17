@@ -1,6 +1,9 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { apiClient } from '@/lib/api-client'
+import { useRouter } from 'next/navigation'
 import {
   Card,
   CardContent,
@@ -34,15 +37,7 @@ interface ExceptionItem {
   timestamp: string
 }
 
-const DEMO_EXCEPTIONS: ExceptionItem[] = [
-  {
-    id: 'exc-1',
-    alertType: 'POLICY_VIOLATION',
-    dealId: 'DEAL-1042',
-    reason: 'Requested discount (35%) exceeds max tier (20%)',
-    timestamp: '2026-05-16 14:32:18',
-  },
-]
+
 
 // Alert type badge styling
 function getAlertBadgeStyles(alertType: ExceptionItem['alertType']) {
@@ -64,9 +59,29 @@ function getAlertLabel(alertType: ExceptionItem['alertType']) {
 
 // Exception Queue Component
 function ExceptionQueue() {
+  const [exceptions, setExceptions] = useState<ExceptionItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  const loadExceptions = async () => {
+    try {
+      const data = await apiClient.get<ExceptionItem[]>('/api/v1/nexus/exceptions')
+      if (data) setExceptions(data)
+    } catch (e) {
+      console.error('Failed to load exceptions', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadExceptions()
+    const interval = setInterval(loadExceptions, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
   const handleReviewDeal = (dealId: string) => {
-    // TODO: Implement review deal handler
-    console.log(`Reviewing deal: ${dealId}`)
+    router.push('/')
   }
 
   return (
@@ -78,13 +93,17 @@ function ExceptionQueue() {
             Exception Queue
           </CardTitle>
           <CardDescription>
-            {DEMO_EXCEPTIONS.length === 0
+            {loading ? 'Loading exceptions...' : exceptions.length === 0
               ? 'No active exceptions. All policies are compliant.'
-              : `${DEMO_EXCEPTIONS.length} policy violation(s) awaiting review`}
+              : `${exceptions.length} policy violation(s) awaiting review`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {DEMO_EXCEPTIONS.length === 0 ? (
+          {loading ? (
+            <div className='flex justify-center py-12'>
+              <Icons.loader className='h-8 w-8 animate-spin text-slate-400' />
+            </div>
+          ) : exceptions.length === 0 ? (
             <div className='flex flex-col items-center justify-center py-12 text-center'>
               <Icons.checkCircle className='mb-4 h-12 w-12 text-emerald-500' strokeWidth={1.5} />
               <p className='text-sm font-medium text-foreground'>No Exceptions</p>
@@ -115,7 +134,7 @@ function ExceptionQueue() {
                   </tr>
                 </thead>
                 <tbody>
-                  {DEMO_EXCEPTIONS.map((exception, index) => (
+                  {exceptions.map((exception, index) => (
                     <motion.tr
                       key={exception.id}
                       className='border-b border-slate-100 hover:bg-slate-50 transition-colors'

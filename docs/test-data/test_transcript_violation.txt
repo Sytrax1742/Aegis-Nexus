@@ -1,0 +1,40 @@
+SALES CALL TRANSCRIPT — CloudNet Global Deal (POLICY VIOLATION)
+Date: May 16, 2026 | Duration: 18 minutes
+AE: Rachel Green | Prospect: David Chen, VP of Operations at CloudNet Global
+
+Rachel (AE): Hi David, thanks for jumping on. What's driving CloudNet's search for a new platform?
+
+David (Prospect): We're struggling with team silos. Marketing and Sales are using completely disconnected tools. We need a unified platform that handles CRM, analytics, and workflow automation.
+
+Rachel: That's our sweet spot. How many users would need access?
+
+David: About 200 across three regions — US, EMEA, and APAC. And we'd need custom API integrations with our existing ERP system.
+
+Rachel: For 200 seats with custom integrations, we're looking at our Premium Enterprise package. Standard pricing would be $180,000 annually.
+
+David: That's steep. Our budget cap is $120,000. Can you make it work?
+
+Rachel: I understand budget constraints. Let me see what I can do — I could bring it down to $115,000. That's a 36% discount.
+
+David: That works for us. But we also need custom SLA terms — 99.99% uptime guarantee with 15-minute response time on P1 issues.
+
+Rachel: I can include that. And we'd want a 3-year commitment to lock in this pricing.
+
+David: Deal. Three years at $115,000/year. When can we start?
+
+Rachel: I'll have the proposal with custom contract terms ready by Monday.
+
+DEAL SUMMARY:
+- Company: CloudNet Global
+- Contact: David Chen, VP of Operations
+- Deal Value: $115,000/year x 3 years = $345,000 total
+- Discount: 36% (EXCEEDS 35% HARD CAP — VP+CEO APPROVAL REQUIRED)
+- Custom SLA Terms: Yes (REQUIRES LEGAL REVIEW)
+- Multi-Year: 3 years (REQUIRES VP SIGN-OFF)
+- Custom API Integration: Yes
+- Timeline: Close by end of May 2026
+- VIOLATIONS DETECTED:
+  1. Discount exceeds 35% hard cap
+  2. AE offered discount beyond authority (max 10%)
+  3. Custom SLA terms without legal review
+  4. Multi-year commitment without VP approval

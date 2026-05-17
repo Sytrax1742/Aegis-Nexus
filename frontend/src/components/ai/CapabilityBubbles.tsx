@@ -11,12 +11,12 @@ interface Capability {
 }
 
 const CAPABILITIES: Capability[] = [
-  { icon: Icons.helpCircle, label: 'What can you help me with?', query: 'What can you help me with?' },
-  { icon: Icons.activity, label: 'Show recent activity', query: 'Show me recent activity' },
-  { icon: Icons.fileText, label: 'Generate a report', query: 'Generate a report' },
-  { icon: Icons.brain, label: 'Create a policy', query: 'Help me create a new policy' },
-  { icon: Icons.lightbulb, label: 'Show insights', query: 'Show me AI insights' },
-  { icon: Icons.info, label: 'Explain this page', query: 'Explain this page to me' },
+  { icon: Icons.activity, label: 'Pipeline Status', query: 'What is the current status of our deal pipeline? Show me a summary.' },
+  { icon: Icons.shield, label: 'Check Guardrails', query: 'What are our active sales guardrails? List the discount limits and escalation triggers.' },
+  { icon: Icons.brain, label: 'Agent Status', query: 'Show me the status of all Supervity agents. Which ones are active?' },
+  { icon: Icons.fileText, label: 'Deal Analysis', query: 'Help me analyze a deal for compliance with our corporate policies.' },
+  { icon: Icons.lightbulb, label: 'Revenue Insights', query: 'What revenue insights can you generate from our recent pipeline activity?' },
+  { icon: Icons.helpCircle, label: 'How does this work?', query: 'Explain the Aegis-Nexus pipeline. How do the 7 phases work and what does each Supervity agent do?' },
 ]
 
 interface CapabilityBubblesProps {
@@ -53,4 +53,3 @@ export function CapabilityBubbles({ onSelect }: CapabilityBubblesProps) {
     </div>
   )
 }
-

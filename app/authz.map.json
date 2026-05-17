@@ -3,6 +3,10 @@
     "description": "Any authenticated user can check their pending status",
     "ALL": []
   },
+  "/api/zoho/callback": {
+    "description": "Zoho OAuth2 callback - public (redirect from Zoho)",
+    "ALL": []
+  },
   "/api/ai/chat": {
     "description": "AI chat - requires approved user",
     "ANY": ["admin", "user"]

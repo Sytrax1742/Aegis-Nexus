@@ -1,0 +1,53 @@
+AEGIS CORP — CORPORATE SALES & DISCOUNT POLICY 2026
+====================================================
+
+EFFECTIVE DATE: January 1, 2026
+APPROVED BY: Sarah Jenkins, VP of Sales
+
+1. DISCOUNT AUTHORITY MATRIX
+-----------------------------
+- Account Executive (AE): Up to 10% discount
+- Senior AE / Team Lead: Up to 15% discount
+- Regional Sales Manager: Up to 20% discount
+- VP of Sales (Sarah Jenkins): Up to 35% discount (HARD CAP)
+- Any discount above 35% requires CEO + CFO joint approval
+
+2. DEAL SIZE REQUIREMENTS
+--------------------------
+- Minimum deal size: $5,000 ARR
+- Deals under $5,000 are auto-rejected unless bundled with enterprise contract
+- Enterprise tier: $100,000+ ARR (requires dedicated Sales Engineer)
+
+3. PAYMENT TERMS
+-----------------
+- Standard: Net 30
+- Extended terms (Net 60/90): Requires Regional Manager approval
+- Prepaid annual: Eligible for additional 5% discount
+
+4. COMPETITOR DISPLACEMENT RULES
+----------------------------------
+- When displacing DataSync, Salesforce, or HubSpot: Additional 5% displacement discount allowed
+- Must document competitor name, current contract end date, and pain points
+- Displacement deals require battlecard completion before proposal
+
+5. MULTI-YEAR CONTRACT RULES
+------------------------------
+- 2-year contracts: Additional 3% discount allowed
+- 3-year contracts: Additional 5% discount allowed
+- Multi-year contracts require VP of Sales sign-off regardless of discount level
+
+6. ESCALATION TRIGGERS (AUTO-FLAG)
+------------------------------------
+The following scenarios automatically escalate to VP of Sales:
+- Discount exceeds 20%
+- Deal involves competitor mention
+- Custom pricing requested
+- Multi-year term proposed
+- Deal size exceeds $50,000
+- Prospect requests non-standard payment terms
+
+7. COMMISSION PROTECTION
+--------------------------
+- Full commission on deals at or below approved discount tier
+- 50% commission reduction if discount exceeds authority without pre-approval
+- Zero commission on deals closed without CRM entry
